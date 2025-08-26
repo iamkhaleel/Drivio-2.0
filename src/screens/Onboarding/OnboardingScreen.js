@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Swiper from 'react-native-swiper';
+import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -74,7 +75,7 @@ export default function OnboardingScreen({ navigation }) {
             ) : (
               <TouchableOpacity
                 style={styles.button}
-                onPress={() => navigation.navigate('Home')}
+                onPress={() => navigation.navigate('Login')}
               >
                 <Text style={styles.buttonText}>Get Started</Text>
               </TouchableOpacity>
