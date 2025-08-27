@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { useNavigation } from '@react-navigation/native';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -40,7 +41,10 @@ export default function LoginScreen({ navigation }) {
         />
 
         {/* Register Button */}
-        <TouchableOpacity style={styles.primaryButton}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => navigation.navigate('Main')} // or Register
+        >
           <Text style={styles.primaryButtonText}>Log in</Text>
         </TouchableOpacity>
 
@@ -65,6 +69,10 @@ export default function LoginScreen({ navigation }) {
           onPress={() => navigation.navigate('Register')}
         >
           <Text style={styles.primaryButtonText}>Sign up</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+          <Text style={styles.footerText}>Forgot Password? Click Here </Text>
         </TouchableOpacity>
       </ScrollView>
     </LinearGradient>
