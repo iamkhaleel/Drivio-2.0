@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,29 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
+import MapView, { Marker } from 'react-native-maps';
+import Geolocation from '@react-native-community/geolocation';
 
 const { width, height } = Dimensions.get('window');
 
 export default function HomeScreen() {
+  const [location, setLocation] = useState(null);
+
+  useEffect(() => {
+    Geolocation.getCurrentPosition(
+      position => {
+        setLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        });
+      },
+      error => console.log(error),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+    );
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header with Search */}
@@ -29,10 +48,21 @@ export default function HomeScreen() {
 
       {/* Map Section */}
       <View style={styles.mapContainer}>
-        {/* Simulated Map Background */}
-        <View style={styles.fakeMap}>
-          <Text style={styles.mapText}>Map Placeholder</Text>
-        </View>
+        {location ? (
+          <MapView
+            style={styles.fakeMap}
+            region={location}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+            provider="google"
+          >
+            <Marker coordinate={location} title="You are here" />
+          </MapView>
+        ) : (
+          <View style={styles.fakeMap}>
+            <Text style={styles.mapText}>Loading map...</Text>
+          </View>
+        )}
 
         {/* Top Overlay Buttons */}
         <View style={styles.topButtons}>
