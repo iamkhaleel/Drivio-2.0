@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,31 +6,92 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/FontAwesome';
-import { useNavigation } from '@react-navigation/native';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // Configure Google Sign-In
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId:
+        '548976357941-7r05gerdadgutk8lfsuboqbgg1v32m5e.apps.googleusercontent.com',
+    });
+  }, []);
+
+  // 🔥 Email/Password Login
+  const handleLogin = async () => {
+    try {
+      const userCredential = await auth().signInWithEmailAndPassword(
+        email,
+        password,
+      );
+      const user = userCredential.user;
+
+      if (!user.emailVerified) {
+        Alert.alert('Email Not Verified', 'Please verify your email first.');
+        return;
+      }
+
+      Alert.alert('Welcome Back', `Hello, ${user.displayName || 'User'}!`);
+      await AsyncStorage.setItem('userLoggedIn', 'true');
+    } catch (err) {
+      console.error('Login error:', err.message);
+      Alert.alert('Login Error', err.message || 'Failed to log in.');
+    }
+  };
+
+  // 🔥 Google Sign-In
+  const handleGoogleSignIn = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      const { idToken } = await GoogleSignin.signIn();
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      const userCredential = await auth().signInWithCredential(
+        googleCredential,
+      );
+      const user = userCredential.user;
+
+      // Check if user exists in Firestore, if not create
+      const userDoc = await firestore().collection('users').doc(user.uid).get();
+      if (!userDoc.exists) {
+        await firestore().collection('users').doc(user.uid).set({
+          username: user.displayName,
+          email: user.email,
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      Alert.alert('Welcome', `Hello, ${user.displayName || 'User'}!`);
+      navigation.navigate('Main');
+    } catch (err) {
+      console.error('Google Sign-In error:', err.message);
+      Alert.alert('Error', err.message || 'Google Sign-In failed.');
+    }
+  };
+
   return (
     <LinearGradient colors={['#0F0E0E', '#FFFCFB']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Title */}
         <Text style={styles.title}>Log In</Text>
 
-        {/* Email Input */}
         <TextInput
           style={styles.input}
           placeholder="Email"
           placeholderTextColor="#ccc"
           value={email}
           onChangeText={setEmail}
+          keyboardType="email-address"
         />
 
-        {/* Password Input */}
         <TextInput
           style={styles.input}
           placeholder="Password"
@@ -40,39 +101,28 @@ export default function LoginScreen({ navigation }) {
           onChangeText={setPassword}
         />
 
-        {/* Register Button */}
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => navigation.navigate('Main')} // or Register
-        >
-          <Text style={styles.primaryButtonText}>Log in</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
+          <Text style={styles.primaryButtonText}>Log In</Text>
         </TouchableOpacity>
 
-        {/* Divider */}
         <Text style={styles.orText}>Or Log In with</Text>
 
-        {/* Social Buttons */}
         <View style={styles.socialContainer}>
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity
+            style={styles.socialButton}
+            onPress={handleGoogleSignIn}
+          >
             <Icon name="google" size={20} color="#fff" />
             <Text style={styles.socialText}>Login with Google</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Login Navigation */}
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
           <Text style={styles.footerText}>Don't have an account? Sign up</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => navigation.navigate('Register')}
-        >
-          <Text style={styles.primaryButtonText}>Sign up</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-          <Text style={styles.footerText}>Forgot Password? Click Here </Text>
+          <Text style={styles.footerText}>Forgot Password? Click Here</Text>
         </TouchableOpacity>
       </ScrollView>
     </LinearGradient>

@@ -90,15 +90,15 @@ export default function HomeScreen() {
 
         {/* Bottom Buttons */}
         <View style={styles.bottomContainer}>
-          <TouchableOpacity style={styles.smallCircle}>
+          {/* <TouchableOpacity style={styles.smallCircle}>
             <Icon name="options-outline" size={24} color="#fff" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           <TouchableOpacity style={styles.goButton}>
             <Text style={styles.goText}>GO</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.smallCircle}>
+          {/* <TouchableOpacity style={styles.smallCircle}>
             <Icon name="settings-outline" size={24} color="#fff" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Status Bar: Only show if offline */}
@@ -183,10 +183,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 90,
     width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 40,
-    alignItems: 'center',
+    alignItems: 'center', // Center vertically
+    justifyContent: 'center', // Center horizontally
   },
   smallCircle: {
     backgroundColor: '#1C1C1C',

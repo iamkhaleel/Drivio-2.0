@@ -1,50 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Image,
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function ProfileScreen() {
-  const [username, setUsername] = useState('John Doe');
-  const [email] = useState('john.doe@example.com'); // Email is read-only
-  const [profilePic, setProfilePic] = useState(null); // Default no image
+export default function ProfileScreen({ navigation }) {
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
 
-  const handleImageChange = () => {
-    Alert.alert('Change Profile Picture', 'This will open image picker.');
-    // Later integrate image picker: react-native-image-picker or expo-image-picker
+  // Fetch user profile data on mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const user = auth().currentUser;
+        if (!user) return;
+        setEmail(user.email);
+        const doc = await firestore().collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          const data = doc.data();
+          setUsername(data.username || '');
+        } else {
+          console.log('No user document found in Firestore.');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+    fetchUserData();
+  }, []);
+
+  // Save changes to Firestore (username only)
+  const handleSave = async () => {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        Alert.alert('Error', 'No authenticated user found');
+        return;
+      }
+
+      // Update Firestore with username only
+      await firestore().collection('users').doc(user.uid).set(
+        {
+          username,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      Alert.alert('Success', 'Username updated successfully');
+    } catch (error) {
+      console.error('Profile update error:', error);
+      Alert.alert('Error', `Failed to update username: ${error.message}`);
+    }
   };
 
-  const handleSave = () => {
-    Alert.alert('Profile Updated', `Username changed to ${username}`);
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Logged Out', 'You have been logged out.');
-    // Integrate actual logout logic here
+  // Logout user
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+      await AsyncStorage.removeItem('userLoggedIn');
+      navigation.replace('LoginScreen');
+    } catch (error) {
+      Alert.alert('Logout Error', error.message);
+    }
   };
 
   return (
     <View style={styles.container}>
-      {/* Profile Picture Section */}
+      {/* Profile Picture Placeholder (non-functional) */}
       <View style={styles.profilePicContainer}>
-        <TouchableOpacity onPress={handleImageChange}>
-          {profilePic ? (
-            <Image source={{ uri: profilePic }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.defaultImage}>
-              <Icon name="person-circle-outline" size={100} color="#FFFCFB" />
-            </View>
-          )}
-          <View style={styles.editIcon}>
-            <Icon name="camera" size={20} color="#FFFCFB" />
-          </View>
-        </TouchableOpacity>
+        <View style={styles.defaultImage}>
+          <Icon name="person-circle-outline" size={100} color="#FFFCFB" />
+        </View>
       </View>
 
       {/* Profile Info */}
@@ -70,13 +105,17 @@ export default function ProfileScreen() {
       </TouchableOpacity>
 
       {/* Logout Button */}
-      <TouchableOpacity style={styles.saveButton} onPress={handleLogout}>
+      <TouchableOpacity
+        style={[styles.saveButton, { backgroundColor: '#FF3B30' }]}
+        onPress={handleLogout}
+      >
         <Text style={styles.saveText}>Log out</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -87,12 +126,6 @@ const styles = StyleSheet.create({
   profilePicContainer: {
     alignItems: 'center',
     marginVertical: 30,
-    position: 'relative',
-  },
-  profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
   },
   defaultImage: {
     width: 120,
@@ -101,14 +134,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1C1C1C',
-  },
-  editIcon: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#A91079',
-    borderRadius: 20,
-    padding: 5,
   },
   infoContainer: {
     width: '100%',

@@ -23,57 +23,84 @@ export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSignUp = () => {
-    auth()
-      .createUserWithEmailAndPassword(username, email, password)
-      .then(() => {
-        Alert.alert('Success', 'Account created! Please verify your email.', [
-          { text: 'OK', onPress: () => navigation.navigate('Login') },
-        ]);
-      })
-      .catch(err => {
-        console.error('Sign-up error:', err.message);
-        Alert.alert('Error', err.message || 'Sign-up failed');
+  useEffect(() => {
+    configureGoogleSign();
+  }, []);
+
+  const configureGoogleSign = async () => {
+    try {
+      await GoogleSignin.configure({
+        webClientId:
+          '548976357941-7r05gerdadgutk8lfsuboqbgg1v32m5e.apps.googleusercontent.com',
+        offlineAccess: true,
+        forceCodeForRefreshToken: true,
       });
+    } catch (error) {
+      console.error('Google Sign-in configuration error:', error);
+    }
   };
 
-  // Handle email/password sign-up
-  // const handleSignUp = async () => {
-  //   try {
-  //     const userCredential = await auth().createUserWithEmailAndPassword(
-  //       email,
-  //       password,
-  //     );
-  //     const user = userCredential.user;
-
-  //     // Update user profile with username
-  //     await user.updateProfile({ displayName: username });
-
-  //     // Send email verification
-  //     await user.sendEmailVerification();
-
-  //     Alert.alert('Success', 'Account created! Please verify your email.', [
-  //       { text: 'OK', onPress: () => navigation.navigate('Login') },
-  //     ]);
-  //   } catch (err) {
-  //     console.error('Sign-up error:', err.message);
-  //     Alert.alert('Error', err.message || 'Sign-up failed');
-  //   }
-  // };
-
-  // Handle Google OAuth sign-up
-  const handleGoogleSignUp = async () => {
+  const handleGoogleSignIn = async () => {
     try {
-      // Sign out from Google to ensure fresh login
-      await GoogleSignin.signOut();
+      // Prompt user to sign in with Google
       await GoogleSignin.hasPlayServices();
       const { idToken } = await GoogleSignin.signIn();
+
+      // Create Firebase credential with the token
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-      await auth().signInWithCredential(googleCredential);
-      navigation.navigate('Home');
+
+      // Sign in with credential
+      const userCredential = await auth().signInWithCredential(
+        googleCredential,
+      );
+      const user = userCredential.user;
+
+      // Check if user exists in Firestore
+      const userDoc = await firestore().collection('users').doc(user.uid).get();
+      if (!userDoc.exists) {
+        await firestore().collection('users').doc(user.uid).set({
+          username: user.displayName,
+          email: user.email,
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      Alert.alert('Success', `Welcome ${user.displayName}!`);
+      navigation.navigate('Home'); // or wherever you want
     } catch (err) {
-      console.error('Google sign-up error:', err.message);
-      Alert.alert('Error', 'Google sign-up failed');
+      console.error('Google Sign-In error:', err);
+      Alert.alert('Error', err.message || 'Google Sign-In failed');
+    }
+  };
+
+  const handleSignUp = async () => {
+    try {
+      // Create user
+      const userCredential = await auth().createUserWithEmailAndPassword(
+        email,
+        password,
+      );
+      const user = userCredential.user;
+
+      // Update user profile
+      await user.updateProfile({ displayName: username });
+
+      // Save user info in Firestore
+      await firestore().collection('users').doc(user.uid).set({
+        username: username,
+        email: email,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Send email verification
+      await user.sendEmailVerification();
+
+      Alert.alert('Success', 'Account created! Please verify your email.', [
+        { text: 'OK', onPress: () => navigation.navigate('Login') },
+      ]);
+    } catch (err) {
+      console.error('Sign-up error:', err.message);
+      Alert.alert('Error', err.message || 'Sign-up failed');
     }
   };
 
@@ -124,7 +151,7 @@ export default function RegisterScreen({ navigation }) {
         <View style={styles.socialContainer}>
           <TouchableOpacity
             style={styles.socialButton}
-            onPress={handleGoogleSignUp}
+            onPress={handleGoogleSignIn}
           >
             <Icon name="google" size={20} color="#fff" />
             <Text style={styles.socialText}>Sign up with Google</Text>
