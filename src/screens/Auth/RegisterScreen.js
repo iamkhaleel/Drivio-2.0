@@ -6,14 +6,76 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
+import { useEffect } from 'react';
 
 export default function RegisterScreen({ navigation }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  const handleSignUp = () => {
+    auth()
+      .createUserWithEmailAndPassword(username, email, password)
+      .then(() => {
+        Alert.alert('Success', 'Account created! Please verify your email.', [
+          { text: 'OK', onPress: () => navigation.navigate('Login') },
+        ]);
+      })
+      .catch(err => {
+        console.error('Sign-up error:', err.message);
+        Alert.alert('Error', err.message || 'Sign-up failed');
+      });
+  };
+
+  // Handle email/password sign-up
+  // const handleSignUp = async () => {
+  //   try {
+  //     const userCredential = await auth().createUserWithEmailAndPassword(
+  //       email,
+  //       password,
+  //     );
+  //     const user = userCredential.user;
+
+  //     // Update user profile with username
+  //     await user.updateProfile({ displayName: username });
+
+  //     // Send email verification
+  //     await user.sendEmailVerification();
+
+  //     Alert.alert('Success', 'Account created! Please verify your email.', [
+  //       { text: 'OK', onPress: () => navigation.navigate('Login') },
+  //     ]);
+  //   } catch (err) {
+  //     console.error('Sign-up error:', err.message);
+  //     Alert.alert('Error', err.message || 'Sign-up failed');
+  //   }
+  // };
+
+  // Handle Google OAuth sign-up
+  const handleGoogleSignUp = async () => {
+    try {
+      // Sign out from Google to ensure fresh login
+      await GoogleSignin.signOut();
+      await GoogleSignin.hasPlayServices();
+      const { idToken } = await GoogleSignin.signIn();
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      await auth().signInWithCredential(googleCredential);
+      navigation.navigate('Home');
+    } catch (err) {
+      console.error('Google sign-up error:', err.message);
+      Alert.alert('Error', 'Google sign-up failed');
+    }
+  };
 
   return (
     <LinearGradient colors={['#0F0E0E', '#FFFCFB']} style={styles.container}>
@@ -37,6 +99,7 @@ export default function RegisterScreen({ navigation }) {
           placeholderTextColor="#ccc"
           value={email}
           onChangeText={setEmail}
+          keyboardType="email-address"
         />
 
         {/* Password Input */}
@@ -50,7 +113,7 @@ export default function RegisterScreen({ navigation }) {
         />
 
         {/* Register Button */}
-        <TouchableOpacity style={styles.primaryButton}>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp}>
           <Text style={styles.primaryButtonText}>Sign up</Text>
         </TouchableOpacity>
 
@@ -59,7 +122,10 @@ export default function RegisterScreen({ navigation }) {
 
         {/* Social Buttons */}
         <View style={styles.socialContainer}>
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity
+            style={styles.socialButton}
+            onPress={handleGoogleSignUp}
+          >
             <Icon name="google" size={20} color="#fff" />
             <Text style={styles.socialText}>Sign up with Google</Text>
           </TouchableOpacity>

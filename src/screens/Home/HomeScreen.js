@@ -11,12 +11,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MapView, { Marker } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
+import NetInfo from '@react-native-community/netinfo';
 
 const { width, height } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
+  const [isOffline, setIsOffline] = useState(false);
 
+  // Check internet connectivity
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsOffline(!state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Get user location
   useEffect(() => {
     Geolocation.getCurrentPosition(
       position => {
@@ -69,11 +80,9 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.circleButton}>
             <Icon name="menu" size={24} color="#fff" />
           </TouchableOpacity>
-
           <View style={styles.earningsBadge}>
             <Text style={styles.earningsText}>$36.45</Text>
           </View>
-
           <TouchableOpacity style={styles.circleButton}>
             <Icon name="search" size={24} color="#fff" />
           </TouchableOpacity>
@@ -84,21 +93,21 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.smallCircle}>
             <Icon name="options-outline" size={24} color="#fff" />
           </TouchableOpacity>
-
           <TouchableOpacity style={styles.goButton}>
             <Text style={styles.goText}>GO</Text>
           </TouchableOpacity>
-
           <TouchableOpacity style={styles.smallCircle}>
             <Icon name="settings-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {/* Status Bar */}
-        <View style={styles.statusBar}>
-          <Text style={styles.statusText}>You're offline</Text>
-          <Icon name="list-outline" size={22} color="#fff" />
-        </View>
+        {/* Status Bar: Only show if offline */}
+        {isOffline && (
+          <View style={styles.statusBar}>
+            <Text style={styles.statusText}>You're offline</Text>
+            <Icon name="list-outline" size={22} color="#fff" />
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
