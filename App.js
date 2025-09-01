@@ -8,6 +8,7 @@ import RegisterScreen from './src/screens/Auth/RegisterScreen';
 import HomeScreen from './src/screens/Home/HomeScreen';
 import ProfileScreen from './src/screens/Home/ProfileScreen';
 import MainTabNavigator from './src/navigation/MainTabNavigator';
+import ForgotPasswordScreen from './src/screens/Auth/ForgotPasswordScreen';
 
 const Stack = createStackNavigator();
 
@@ -16,6 +17,7 @@ function AuthNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </Stack.Navigator>
   );
 }

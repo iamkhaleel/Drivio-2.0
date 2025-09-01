@@ -67,7 +67,6 @@ export default function ProfileScreen({ navigation }) {
     try {
       await auth().signOut();
       await AsyncStorage.removeItem('userLoggedIn');
-      navigation.replace('LoginScreen');
     } catch (error) {
       Alert.alert('Logout Error', error.message);
     }

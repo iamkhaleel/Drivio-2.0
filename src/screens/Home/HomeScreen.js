@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,18 +6,26 @@ import {
   TextInput,
   TouchableOpacity,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
 import Geolocation from '@react-native-community/geolocation';
 import NetInfo from '@react-native-community/netinfo';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import 'react-native-get-random-values';
 
 const { width, height } = Dimensions.get('window');
+const GOOGLE_MAPS_APIKEY = 'AIzaSyDVHGYwW8ZjOxqLDxNjhp4LGBSer3K4o-g'; // Remove space from your key
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
+  const [destination, setDestination] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
+  const [routeCoordinates, setRouteCoordinates] = useState([]);
+  const mapRef = useRef(null);
 
   // Check internet connectivity
   useEffect(() => {
@@ -31,28 +39,131 @@ export default function HomeScreen() {
   useEffect(() => {
     Geolocation.getCurrentPosition(
       position => {
-        setLocation({
+        const newLocation = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
-        });
+        };
+        setLocation(newLocation);
       },
       error => console.log(error),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
     );
   }, []);
 
+  const handlePress = selectedLocation => {
+    setDestination(selectedLocation);
+
+    // Fit map to show both current location and destination
+    if (location && selectedLocation) {
+      const coordinates = [location, selectedLocation];
+      mapRef.current.fitToCoordinates(coordinates, {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
+    }
+  };
+
+  const handleGoButtonPress = () => {
+    if (destination && location) {
+      // The MapViewDirections component will automatically draw the route
+      console.log('Calculating route to destination');
+    }
+  };
+
+  const handleDirectionsReady = result => {
+    console.log('Directions ready:', result);
+    // You can use the result for additional functionality if needed
+  };
+
+  const inputRef = useRef(null);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header with Search */}
       <View style={styles.header}>
-        <TextInput
+        <GooglePlacesAutocomplete
           placeholder="Where to?"
-          placeholderTextColor="#ccc"
-          style={styles.searchInput}
+          fetchDetails={true}
+          debounce={200}
+          enablePoweredByContainer={true}
+          nearbyPlacesAPI="GooglePlacesSearch"
+          minLength={2}
+          timeout={10000}
+          keyboardShouldPersistTaps="handled"
+          listViewDisplayed="auto"
+          keepResultsAfterBlur={false}
+          currentLocation={false}
+          currentLocationLabel="Current location"
+          enableHighAccuracyLocation={true}
+          onFail={() => console.warn('Google Places Autocomplete failed')}
+          onNotFound={() => console.log('No results found')}
+          onTimeout={() => console.warn('Google Places request timeout')}
+          predefinedPlaces={[]}
+          predefinedPlacesAlwaysVisible={false}
+          styles={{
+            textInputContainer: {
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 20,
+              marginHorizontal: 20,
+              position: 'relative',
+              shadowColor: '#d4d4d4',
+            },
+            textInput: {
+              backgroundColor: 'white',
+              fontWeight: '600',
+              fontSize: 16,
+              marginTop: 5,
+              width: '100%',
+              fontFamily: 'JakartaSans-Medium',
+              color: '#000',
+            },
+            listView: {
+              backgroundColor: 'white',
+              position: 'relative',
+              top: 0,
+              width: '100%',
+              zIndex: 99,
+              borderRadius: 10,
+              shadowColor: '#d4d4d4',
+            },
+          }}
+          query={{
+            key: GOOGLE_MAPS_APIKEY,
+            language: 'en',
+            types: 'geocode',
+          }}
+          onPress={(data, details = null) => {
+            console.log('Selected data:', data);
+            console.log('Details:', details);
+
+            if (!details?.geometry?.location) {
+              console.warn('Missing geometry details!');
+              return;
+            }
+
+            handlePress({
+              latitude: details.geometry.location.lat,
+              longitude: details.geometry.location.lng,
+              address: data.description,
+            });
+          }}
+          GooglePlacesSearchQuery={{
+            rankby: 'distance',
+            radius: 1000,
+          }}
+          textInputProps={{
+            placeholderTextColor: 'gray',
+            placeholder: 'Where do you want to go?',
+          }}
+          ref={inputRef}
         />
-        <TouchableOpacity style={styles.searchIcon}>
+        <TouchableOpacity
+          style={styles.searchIcon}
+          onPress={() => inputRef.current?.focus()}
+        >
           <Icon name="search" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -61,6 +172,7 @@ export default function HomeScreen() {
       <View style={styles.mapContainer}>
         {location ? (
           <MapView
+            ref={mapRef}
             style={styles.fakeMap}
             region={location}
             showsUserLocation={true}
@@ -68,6 +180,29 @@ export default function HomeScreen() {
             provider="google"
           >
             <Marker coordinate={location} title="You are here" />
+
+            {destination && (
+              <Marker
+                coordinate={destination}
+                title="Destination"
+                description={destination.address}
+                pinColor="red"
+              />
+            )}
+
+            {destination && location && (
+              <MapViewDirections
+                origin={location}
+                destination={destination}
+                apikey={GOOGLE_MAPS_APIKEY}
+                strokeWidth={4}
+                strokeColor="#0066FF"
+                onReady={handleDirectionsReady}
+                onError={errorMessage => {
+                  console.log('Directions error:', errorMessage);
+                }}
+              />
+            )}
           </MapView>
         ) : (
           <View style={styles.fakeMap}>
@@ -83,22 +218,16 @@ export default function HomeScreen() {
           <View style={styles.earningsBadge}>
             <Text style={styles.earningsText}>$36.45</Text>
           </View>
-          <TouchableOpacity style={styles.circleButton}>
-            <Icon name="search" size={24} color="#fff" />
-          </TouchableOpacity>
         </View>
 
         {/* Bottom Buttons */}
         <View style={styles.bottomContainer}>
-          {/* <TouchableOpacity style={styles.smallCircle}>
-            <Icon name="options-outline" size={24} color="#fff" />
-          </TouchableOpacity> */}
-          <TouchableOpacity style={styles.goButton}>
+          <TouchableOpacity
+            style={styles.goButton}
+            onPress={handleGoButtonPress}
+          >
             <Text style={styles.goText}>GO</Text>
           </TouchableOpacity>
-          {/* <TouchableOpacity style={styles.smallCircle}>
-            <Icon name="settings-outline" size={24} color="#fff" />
-          </TouchableOpacity> */}
         </View>
 
         {/* Status Bar: Only show if offline */}
@@ -173,6 +302,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
+    right: '37%',
   },
   earningsText: {
     color: '#00FF6A',
