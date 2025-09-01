@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   Dimensions,
   Image,
+  ScrollView,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -18,14 +21,70 @@ import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplet
 import 'react-native-get-random-values';
 
 const { width, height } = Dimensions.get('window');
-const GOOGLE_MAPS_APIKEY = 'AIzaSyDVHGYwW8ZjOxqLDxNjhp4LGBSer3K4o-g'; // Remove space from your key
+const GOOGLE_MAPS_APIKEY = 'AIzaSyDVHGYwW8ZjOxqLDxNjhp4LGBSer3K4o-g';
+
+// Mock data for rides with driver and car images
+const mockRides = [
+  {
+    id: '1',
+    driverName: 'John Doe',
+    carModel: 'Toyota Camry',
+    licensePlate: 'ABC123',
+    rating: 4.8,
+    price: 15.5,
+    eta: '5 min',
+    carColor: 'Black',
+    paymentMethods: ['stripe', 'bank_transfer'],
+    bankAccount: '****1234',
+    driverImage:
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+    carImage:
+      'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=200&h=120&fit=crop',
+  },
+  {
+    id: '2',
+    driverName: 'Jane Smith',
+    carModel: 'Honda Civic',
+    licensePlate: 'XYZ789',
+    rating: 4.9,
+    price: 12.75,
+    eta: '3 min',
+    carColor: 'White',
+    paymentMethods: ['stripe'],
+    bankAccount: '****5678',
+    driverImage:
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+    carImage:
+      'https://images.unsplash.com/photo-1542362567-b07e54358753?w=200&h=120&fit=crop',
+  },
+  {
+    id: '3',
+    driverName: 'Mike Johnson',
+    carModel: 'Tesla Model 3',
+    licensePlate: 'TESLA1',
+    rating: 4.7,
+    price: 18.25,
+    eta: '7 min',
+    carColor: 'Red',
+    paymentMethods: ['stripe', 'bank_transfer'],
+    bankAccount: '****9012',
+    driverImage:
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    carImage:
+      'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=200&h=120&fit=crop',
+  },
+];
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [destination, setDestination] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
-  const [routeCoordinates, setRouteCoordinates] = useState([]);
+  const [showRides, setShowRides] = useState(false);
+  const [selectedRide, setSelectedRide] = useState(null);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('');
   const mapRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Check internet connectivity
   useEffect(() => {
@@ -55,7 +114,6 @@ export default function HomeScreen() {
   const handlePress = selectedLocation => {
     setDestination(selectedLocation);
 
-    // Fit map to show both current location and destination
     if (location && selectedLocation) {
       const coordinates = [location, selectedLocation];
       mapRef.current.fitToCoordinates(coordinates, {
@@ -67,23 +125,80 @@ export default function HomeScreen() {
 
   const handleGoButtonPress = () => {
     if (destination && location) {
-      // The MapViewDirections component will automatically draw the route
-      console.log('Calculating route to destination');
+      setShowRides(true);
+      console.log('Finding available rides...');
     }
   };
 
   const handleDirectionsReady = result => {
     console.log('Directions ready:', result);
-    // You can use the result for additional functionality if needed
   };
 
-  const inputRef = useRef(null);
+  const handleRideSelect = ride => {
+    setSelectedRide(ride);
+    setShowRides(false);
+  };
+
+  const handleConfirmRide = () => {
+    setShowPayment(true);
+  };
+
+  const handlePayment = method => {
+    setPaymentMethod(method);
+    console.log(`Processing payment with ${method} for ride:`, selectedRide);
+    // Simulate payment processing
+    setTimeout(() => {
+      setShowPayment(false);
+      setSelectedRide(null);
+      alert('Payment successful! Your ride is on the way.');
+    }, 2000);
+  };
+
+  const renderRideItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.rideItem}
+      onPress={() => handleRideSelect(item)}
+    >
+      <View style={styles.driverImageContainer}>
+        <Image
+          source={{ uri: item.driverImage }}
+          style={styles.driverImage}
+          onError={e => console.log('Image load error:', e.nativeEvent.error)}
+        />
+      </View>
+      <View style={styles.rideInfo}>
+        <Text style={styles.driverName}>{item.driverName}</Text>
+        <Text style={styles.carInfo}>
+          {item.carModel} • {item.carColor}
+        </Text>
+        <Text style={styles.licensePlate}>{item.licensePlate}</Text>
+        <View style={styles.ratingContainer}>
+          <Icon name="star" size={16} color="#FFD700" />
+          <Text style={styles.rating}>{item.rating}</Text>
+        </View>
+      </View>
+      <View style={styles.carImageContainer}>
+        <Image
+          source={{ uri: item.carImage }}
+          style={styles.carImage}
+          onError={e =>
+            console.log('Car image load error:', e.nativeEvent.error)
+          }
+        />
+      </View>
+      <View style={styles.ridePrice}>
+        <Text style={styles.price}>${item.price}</Text>
+        <Text style={styles.eta}>{item.eta}</Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header with Search */}
       <View style={styles.header}>
         <GooglePlacesAutocomplete
+          ref={inputRef}
           placeholder="Where to?"
           fetchDetails={true}
           debounce={200}
@@ -127,7 +242,7 @@ export default function HomeScreen() {
               width: '100%',
               zIndex: 99,
               borderRadius: 10,
-              shadowColor: '#d4d4d4',
+              shadowColor: '##d4d4d4',
             },
           }}
           query={{
@@ -136,9 +251,6 @@ export default function HomeScreen() {
             types: 'geocode',
           }}
           onPress={(data, details = null) => {
-            console.log('Selected data:', data);
-            console.log('Details:', details);
-
             if (!details?.geometry?.location) {
               console.warn('Missing geometry details!');
               return;
@@ -158,7 +270,6 @@ export default function HomeScreen() {
             placeholderTextColor: 'gray',
             placeholder: 'Where do you want to go?',
           }}
-          ref={inputRef}
         />
         <TouchableOpacity
           style={styles.searchIcon}
@@ -238,6 +349,120 @@ export default function HomeScreen() {
           </View>
         )}
       </View>
+
+      {/* Rides List Modal */}
+      <Modal visible={showRides} animationType="slide" transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Available Rides</Text>
+              <TouchableOpacity onPress={() => setShowRides(false)}>
+                <Icon name="close" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={mockRides}
+              renderItem={renderRideItem}
+              keyExtractor={item => item.id}
+              style={styles.ridesList}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Selected Ride Details */}
+      {selectedRide && (
+        <View style={styles.rideDetails}>
+          <View style={styles.rideDetailsHeader}>
+            <Text style={styles.rideDetailsTitle}>Ride Details</Text>
+            <TouchableOpacity onPress={() => setSelectedRide(null)}>
+              <Icon name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.rideDetailsContent}>
+            <View style={styles.driverInfoContainer}>
+              <View style={styles.driverImageContainerLarge}>
+                <Image
+                  source={{ uri: selectedRide.driverImage }}
+                  style={styles.driverImageLarge}
+                  onError={e =>
+                    console.log('Image load error:', e.nativeEvent.error)
+                  }
+                />
+              </View>
+              <View style={styles.driverTextInfo}>
+                <Text style={styles.driverNameLarge}>
+                  {selectedRide.driverName}
+                </Text>
+                <Text style={styles.carInfoLarge}>
+                  {selectedRide.carModel} • {selectedRide.carColor}
+                </Text>
+                <Text style={styles.licensePlateLarge}>
+                  {selectedRide.licensePlate}
+                </Text>
+                <View style={styles.ratingContainerLarge}>
+                  <Icon name="star" size={20} color="#FFD700" />
+                  <Text style={styles.ratingLarge}>{selectedRide.rating}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.carImageContainerLarge}>
+              <Image
+                source={{ uri: selectedRide.carImage }}
+                style={styles.carImageLarge}
+                onError={e =>
+                  console.log('Car image load error:', e.nativeEvent.error)
+                }
+              />
+            </View>
+            <View style={styles.priceContainer}>
+              <Text style={styles.priceLarge}>${selectedRide.price}</Text>
+              <Text style={styles.etaLarge}>ETA: {selectedRide.eta}</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={handleConfirmRide}
+          >
+            <Text style={styles.confirmButtonText}>Confirm Ride</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Payment Modal */}
+      <Modal visible={showPayment} animationType="slide" transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Payment Method</Text>
+              <TouchableOpacity onPress={() => setShowPayment(false)}>
+                <Icon name="close" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.paymentAmount}>
+              Amount: ${selectedRide?.price}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.paymentOption}
+              onPress={() => handlePayment('stripe')}
+            >
+              <Icon name="card" size={24} color="#0066FF" />
+              <Text style={styles.paymentOptionText}>Pay with Stripe</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.paymentOption}
+              onPress={() => handlePayment('bank_transfer')}
+            >
+              <Icon name="business" size={24} color="#0066FF" />
+              <Text style={styles.paymentOptionText}>
+                Bank Transfer to {selectedRide?.bankAccount}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -251,15 +476,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: '#1C1C1C',
-    color: '#FFFCFB',
-    borderRadius: 30,
-    paddingHorizontal: 15,
-    height: 45,
-    fontSize: 16,
   },
   searchIcon: {
     marginLeft: 10,
@@ -313,13 +529,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 90,
     width: '100%',
-    alignItems: 'center', // Center vertically
-    justifyContent: 'center', // Center horizontally
-  },
-  smallCircle: {
-    backgroundColor: '#1C1C1C',
-    borderRadius: 30,
-    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   goButton: {
     backgroundColor: '#0066FF',
@@ -350,5 +561,231 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#FFFCFB',
     fontSize: 18,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  ridesList: {
+    maxHeight: 400,
+  },
+  rideItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  driverImageContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f0f0f0',
+    marginRight: 15,
+    overflow: 'hidden',
+  },
+  driverImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
+  },
+  rideInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  carInfo: {
+    fontSize: 14,
+    color: '#666',
+  },
+  licensePlate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  rating: {
+    marginLeft: 5,
+    color: '#000',
+  },
+  carImageContainer: {
+    width: 60,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    marginRight: 15,
+    overflow: 'hidden',
+  },
+  carImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  ridePrice: {
+    alignItems: 'flex-end',
+    minWidth: 60,
+  },
+  price: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  eta: {
+    fontSize: 12,
+    color: '#666',
+  },
+  rideDetails: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#1C1C1C',
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  rideDetailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  rideDetailsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  rideDetailsContent: {
+    marginBottom: 20,
+  },
+  driverInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  driverImageContainerLarge: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#f0f0f0',
+    marginRight: 15,
+    overflow: 'hidden',
+  },
+  driverImageLarge: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 35,
+  },
+  driverTextInfo: {
+    flex: 1,
+  },
+  driverNameLarge: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5,
+  },
+  carInfoLarge: {
+    fontSize: 16,
+    color: '#ccc',
+    marginBottom: 5,
+  },
+  licensePlateLarge: {
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 10,
+  },
+  ratingContainerLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingLarge: {
+    marginLeft: 5,
+    color: '#fff',
+    fontSize: 16,
+  },
+  carImageContainerLarge: {
+    width: '100%',
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+  carImageLarge: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  priceContainer: {
+    alignItems: 'center',
+  },
+  priceLarge: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#00FF6A',
+    marginBottom: 5,
+  },
+  etaLarge: {
+    fontSize: 16,
+    color: '#ccc',
+  },
+  confirmButton: {
+    backgroundColor: '#0066FF',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  paymentAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  paymentOptionText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#000',
   },
 });

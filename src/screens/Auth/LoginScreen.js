@@ -41,7 +41,6 @@ export default function LoginScreen({ navigation }) {
         return;
       }
 
-      Alert.alert('Welcome Back', `Hello, ${user.displayName || 'User'}!`);
       await AsyncStorage.setItem('userLoggedIn', 'true');
     } catch (err) {
       console.error('Login error:', err.message);
