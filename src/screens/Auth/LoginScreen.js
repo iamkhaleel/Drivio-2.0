@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -18,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Configure Google Sign-In
   useEffect(() => {
@@ -27,8 +29,60 @@ export default function LoginScreen({ navigation }) {
     });
   }, []);
 
-  // 🔥 Email/Password Login
+  // Redirect user based on role
+  const redirectBasedOnRole = async userId => {
+    try {
+      const userDoc = await firestore().collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        const role = userData.role || 'customer'; // Default to 'customer' if role is not set
+
+        // Store user role in AsyncStorage for quick access
+        await AsyncStorage.setItem('userRole', role);
+        await AsyncStorage.setItem('userLoggedIn', 'true');
+
+        // Redirect based on role
+        if (role === 'driver') {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'DriverHome' }],
+          });
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          });
+        }
+      } else {
+        // If user document doesn't exist, assume it's a customer
+        await AsyncStorage.setItem('userRole', 'customer');
+        await AsyncStorage.setItem('userLoggedIn', 'true');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Home' }],
+        });
+      }
+    } catch (error) {
+      console.error('Error redirecting user:', error);
+      Alert.alert(
+        'Error',
+        'Failed to determine user role. Redirecting to default page.',
+      );
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
+    }
+  };
+
+  // Email/Password Login
   const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
     try {
       const userCredential = await auth().signInWithEmailAndPassword(
         email,
@@ -38,19 +92,22 @@ export default function LoginScreen({ navigation }) {
 
       if (!user.emailVerified) {
         Alert.alert('Email Not Verified', 'Please verify your email first.');
+        setIsLoading(false);
         return;
       }
 
-      await AsyncStorage.setItem('userLoggedIn', 'true');
+      await redirectBasedOnRole(user.uid);
     } catch (err) {
       console.error('Login error:', err.message);
       Alert.alert('Login Error', err.message || 'Failed to log in.');
+      setIsLoading(false);
     }
   };
 
-  // 🔥 Google Sign-In
+  // Google Sign-In
   const handleGoogleSignIn = async () => {
     try {
+      setIsLoading(true);
       await GoogleSignin.hasPlayServices();
       const { idToken } = await GoogleSignin.signIn();
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
@@ -65,15 +122,17 @@ export default function LoginScreen({ navigation }) {
         await firestore().collection('users').doc(user.uid).set({
           username: user.displayName,
           email: user.email,
+          role: 'customer', // Default to customer for new users
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
       }
 
       Alert.alert('Welcome', `Hello, ${user.displayName || 'User'}!`);
-      navigation.navigate('Main');
+      await redirectBasedOnRole(user.uid);
     } catch (err) {
-      console.error('Google Sign-In error:', err.message);
+      console.error('Google Sign-In error:', err);
       Alert.alert('Error', err.message || 'Google Sign-In failed.');
+      setIsLoading(false);
     }
   };
 
@@ -89,6 +148,7 @@ export default function LoginScreen({ navigation }) {
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
+          autoCapitalize="none"
         />
 
         <TextInput
@@ -100,9 +160,17 @@ export default function LoginScreen({ navigation }) {
           onChangeText={setPassword}
         />
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-          <Text style={styles.primaryButtonText}>Log In</Text>
-        </TouchableOpacity>
+        {isLoading ? (
+          <ActivityIndicator
+            size="large"
+            color="#fff"
+            style={styles.loadingIndicator}
+          />
+        ) : (
+          <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
+            <Text style={styles.primaryButtonText}>Log In</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.orText}>Or Log In with</Text>
 
@@ -110,6 +178,7 @@ export default function LoginScreen({ navigation }) {
           <TouchableOpacity
             style={styles.socialButton}
             onPress={handleGoogleSignIn}
+            disabled={isLoading}
           >
             <Icon name="google" size={20} color="#fff" />
             <Text style={styles.socialText}>Login with Google</Text>
@@ -130,8 +199,18 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20 },
-  title: { fontSize: 30, color: '#fff', fontWeight: 'bold', marginBottom: 30 },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  title: {
+    fontSize: 30,
+    color: '#fff',
+    fontWeight: 'bold',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
   input: {
     backgroundColor: '#0F0E0E',
     color: '#fff',
@@ -152,18 +231,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  orText: { color: '#0F0E0E', textAlign: 'center', marginBottom: 15 },
-  socialContainer: { gap: 10 },
+  loadingIndicator: {
+    marginBottom: 20,
+  },
+  orText: {
+    color: '#0F0E0E',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  socialContainer: {
+    gap: 10,
+  },
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0F0E0E',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
     marginBottom: 10,
   },
-  socialText: { color: '#fff', marginLeft: 10, fontSize: 16 },
+  socialText: {
+    color: '#fff',
+    marginLeft: 10,
+    fontSize: 16,
+  },
   footerText: {
     color: '#0F0E0E',
     textAlign: 'center',
