@@ -6,6 +6,7 @@ import auth from '@react-native-firebase/auth';
 import LoginScreen from './src/screens/Auth/LoginScreen';
 import RegisterScreen from './src/screens/Auth/RegisterScreen';
 import DriverRegisterationScreen from './src/screens/Auth/DriverRegisterationScreen';
+import DriverHomeScreen from './src/screens/Auth/DriverHomeScreen';
 import HomeScreen from './src/screens/Home/HomeScreen';
 import ProfileScreen from './src/screens/Home/ProfileScreen';
 import MainTabNavigator from './src/navigation/MainTabNavigator';
@@ -22,6 +23,7 @@ function AuthNavigator() {
         name="DriverRegister"
         component={DriverRegisterationScreen}
       />
+      <Stack.Screen name="DriverHome" component={DriverHomeScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </Stack.Navigator>
   );

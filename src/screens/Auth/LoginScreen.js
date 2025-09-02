@@ -185,7 +185,7 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+        <TouchableOpacity onPress={() => navigation.navigate('DriverHome')}>
           <Text style={styles.footerText}>Don't have an account? Sign up</Text>
         </TouchableOpacity>
 
