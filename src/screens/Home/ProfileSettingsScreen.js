@@ -8,16 +8,18 @@ import {
   ScrollView,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import Icon from 'react-native-vector-icons/FontAwesome';
-import auth from '@react-native-firebase/auth';
+import Icon from 'react-native-vector-icons/Feather';
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import * as ImagePicker from 'react-native-image-picker';
 
 export default function ProfileSettingsScreen({ navigation }) {
-  const user = auth().currentUser;
+  // 🔥 TEMPORARY UID for testing
+  const uid = 'test-user-123';
+
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
@@ -38,12 +40,9 @@ export default function ProfileSettingsScreen({ navigation }) {
       try {
         const driverDoc = await firestore()
           .collection('drivers')
-          .doc(user.uid)
+          .doc(uid)
           .get();
-        const userDoc = await firestore()
-          .collection('users')
-          .doc(user.uid)
-          .get();
+        const userDoc = await firestore().collection('users').doc(uid).get();
 
         if (driverDoc.exists) {
           const data = driverDoc.data();
@@ -71,11 +70,11 @@ export default function ProfileSettingsScreen({ navigation }) {
     };
 
     fetchData();
-  }, [user.uid]);
+  }, [uid]);
 
   const pickImage = type => {
     const options = { mediaType: 'photo', quality: 0.8 };
-    ImagePicker.launchImageLibrary(options, async response => {
+    ImagePicker.launchImageLibrary(options, response => {
       if (response.didCancel) return;
       if (response.errorCode) {
         Alert.alert('Error', 'Failed to pick image');
@@ -120,26 +119,29 @@ export default function ProfileSettingsScreen({ navigation }) {
       setUploading(true);
       const driverImageURL = driverImage?.startsWith('http')
         ? driverImage
-        : await uploadImage(driverImage, `drivers/${user.uid}/profile.jpg`);
+        : await uploadImage(driverImage, `drivers/${uid}/profile.jpg`);
       const carImageURL = carImage?.startsWith('http')
         ? carImage
-        : await uploadImage(carImage, `drivers/${user.uid}/car.jpg`);
+        : await uploadImage(carImage, `drivers/${uid}/car.jpg`);
 
-      await firestore().collection('users').doc(user.uid).update({
-        username,
-        email,
-      });
+      await firestore()
+        .collection('users')
+        .doc(uid)
+        .set({ username, email }, { merge: true });
 
-      await firestore().collection('drivers').doc(user.uid).update({
-        fullName,
-        carModel,
-        carColor,
-        licensePlate,
-        bankAccount,
-        driverLicense,
-        driverImage: driverImageURL,
-        carImage: carImageURL,
-      });
+      await firestore().collection('drivers').doc(uid).set(
+        {
+          fullName,
+          carModel,
+          carColor,
+          licensePlate,
+          bankAccount,
+          driverLicense,
+          driverImage: driverImageURL,
+          carImage: carImageURL,
+        },
+        { merge: true },
+      );
 
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
@@ -153,100 +155,98 @@ export default function ProfileSettingsScreen({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={{ color: '#000' }}>Loading...</Text>
+        <ActivityIndicator size="large" color="#FF6B00" />
       </View>
     );
   }
 
   return (
-    <LinearGradient colors={['#0F0E0E', '#FFFCFB']} style={styles.container}>
+    <LinearGradient colors={['#1A1A1A', '#2C2C2C']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Profile Settings</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Username"
-          value={username}
-          onChangeText={setUsername}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Full Name"
-          value={fullName}
-          onChangeText={setFullName}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Car Model"
-          value={carModel}
-          onChangeText={setCarModel}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Car Color"
-          value={carColor}
-          onChangeText={setCarColor}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="License Plate"
-          value={licensePlate}
-          onChangeText={setLicensePlate}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Bank Account"
-          value={bankAccount}
-          onChangeText={setBankAccount}
-          keyboardType="numeric"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Driver License"
-          value={driverLicense}
-          onChangeText={setDriverLicense}
-        />
-
-        <View style={styles.imageRow}>
+        {/* Profile Image */}
+        <View style={styles.avatarContainer}>
           <TouchableOpacity onPress={() => pickImage('driver')}>
             {driverImage ? (
-              <Image
-                source={{ uri: driverImage }}
-                style={styles.imagePreview}
-              />
+              <Image source={{ uri: driverImage }} style={styles.avatar} />
             ) : (
-              <View style={styles.imagePlaceholder}>
-                <Text style={{ color: '#fff' }}>Driver Image</Text>
+              <View style={styles.avatarPlaceholder}>
+                <Icon name="user" size={40} color="#aaa" />
               </View>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => pickImage('car')}>
-            {carImage ? (
-              <Image source={{ uri: carImage }} style={styles.imagePreview} />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Text style={{ color: '#fff' }}>Car Image</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <Text style={styles.avatarLabel}>Tap to update profile picture</Text>
         </View>
 
+        {/* Inputs */}
+        {[
+          { placeholder: 'Username', value: username, setValue: setUsername },
+          {
+            placeholder: 'Email',
+            value: email,
+            setValue: setEmail,
+            keyboardType: 'email-address',
+          },
+          { placeholder: 'Full Name', value: fullName, setValue: setFullName },
+          { placeholder: 'Car Model', value: carModel, setValue: setCarModel },
+          { placeholder: 'Car Color', value: carColor, setValue: setCarColor },
+          {
+            placeholder: 'License Plate',
+            value: licensePlate,
+            setValue: setLicensePlate,
+          },
+          {
+            placeholder: 'Bank Account',
+            value: bankAccount,
+            setValue: setBankAccount,
+            keyboardType: 'numeric',
+          },
+          {
+            placeholder: 'Driver License',
+            value: driverLicense,
+            setValue: setDriverLicense,
+          },
+        ].map((field, index) => (
+          <TextInput
+            key={index}
+            style={styles.input}
+            placeholder={field.placeholder}
+            placeholderTextColor="#888"
+            value={field.value}
+            onChangeText={field.setValue}
+            keyboardType={field.keyboardType || 'default'}
+          />
+        ))}
+
+        {/* Car Image */}
+        <TouchableOpacity
+          style={styles.imageCard}
+          onPress={() => pickImage('car')}
+        >
+          {carImage ? (
+            <Image source={{ uri: carImage }} style={styles.carImage} />
+          ) : (
+            <View style={styles.carPlaceholder}>
+              <Icon name="car" size={35} color="#aaa" />
+              <Text style={{ color: '#aaa', marginTop: 5 }}>
+                Upload Car Image
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Save Button */}
         <TouchableOpacity
           style={styles.saveButton}
           onPress={handleSave}
           disabled={uploading}
         >
-          <Text style={styles.saveButtonText}>
-            {uploading ? 'Saving...' : 'Save Changes'}
-          </Text>
+          {uploading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save Changes</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </LinearGradient>
@@ -257,45 +257,59 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { flexGrow: 1, padding: 20 },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '700',
     color: '#fff',
     marginBottom: 20,
     textAlign: 'center',
   },
-  input: {
-    backgroundColor: '#0F0E0E',
-    color: '#fff',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  imageRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  imagePreview: { width: 100, height: 100, borderRadius: 12 },
-  imagePlaceholder: {
+  avatarContainer: { alignItems: 'center', marginBottom: 20 },
+  avatar: {
     width: 100,
     height: 100,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: '#FF6B00',
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#333',
-    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatarLabel: { color: '#aaa', fontSize: 14, marginTop: 8 },
+  input: {
+    backgroundColor: '#333',
+    color: '#fff',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 12,
+    fontSize: 16,
+  },
+  imageCard: {
+    backgroundColor: '#222',
+    borderRadius: 12,
+    height: 150,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  carImage: { width: '100%', height: '100%', borderRadius: 12 },
+  carPlaceholder: { justifyContent: 'center', alignItems: 'center' },
   saveButton: {
-    backgroundColor: '#000',
+    backgroundColor: '#FF6B00',
     paddingVertical: 15,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 10,
   },
-  saveButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  saveButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#1A1A1A',
   },
 });
