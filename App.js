@@ -1,54 +1,74 @@
 import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import OnboardingScreen from './src/screens/Onboarding/OnboardingScreen';
 import LoginScreen from './src/screens/Auth/LoginScreen';
 import RegisterScreen from './src/screens/Auth/RegisterScreen';
-import DriverRegisterationScreen from './src/screens/Auth/DriverRegisterationScreen';
+import DriverRegisterScreen from './src/screens/Auth/DriverRegisterScreen';
 import HomeScreen from './src/screens/Home/HomeScreen';
-import ProfileScreen from './src/screens/Home/ProfileScreen';
-import MainTabNavigator from './src/navigation/MainTabNavigator';
+import DriverHomeScreen from './src/screens/Home/DriverHomeScreen';
 import ForgotPasswordScreen from './src/screens/Auth/ForgotPasswordScreen';
-import ProfileSettingsScreen from './src/screens/Home/ProfileSettingsScreen';
+import MainTabNavigator from './src/navigation/MainTabNavigator';
 
 const Stack = createStackNavigator();
 
-function AuthNavigator() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen
-        name="DriverRegister"
-        component={DriverRegisterationScreen}
-      />
-      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-    </Stack.Navigator>
-  );
-}
-
-function AppNavigator() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Main" component={MainTabNavigator} />
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-    </Stack.Navigator>
-  );
-}
-
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [initialRoute, setInitialRoute] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(setUser);
+    const unsubscribe = auth().onAuthStateChanged(async user => {
+      if (user) {
+        const userDoc = await firestore()
+          .collection('users')
+          .doc(user.uid)
+          .get();
+        const role = userDoc.exists ? userDoc.data().role : 'rider';
+        await AsyncStorage.setItem('userRole', role);
+        setInitialRoute(role === 'driver' ? 'DriverHome' : 'Main');
+      } else {
+        setInitialRoute('Onboarding');
+      }
+      setIsLoading(false);
+    });
+
     return unsubscribe;
   }, []);
 
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#0F0E0E',
+        }}
+      >
+        <ActivityIndicator size="large" color="#FFFCFB" />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
-      {user ? <AppNavigator /> : <AuthNavigator />}
+      <Stack.Navigator
+        initialRouteName={initialRoute}
+        screenOptions={{ headerShown: false }}
+      >
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="Main" component={MainTabNavigator} />
+        <Stack.Screen name="DriverHome" component={DriverHomeScreen} />
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }
