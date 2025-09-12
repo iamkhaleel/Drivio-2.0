@@ -1,31 +1,73 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView } from 'react-native';
-
-const earnings = [
-  { id: '1', date: '2025-09-01', amount: '$50.00' },
-  { id: '2', date: '2025-08-31', amount: '$35.00' },
-  { id: '3', date: '2025-08-30', amount: '$60.00' },
-];
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 export default function EarningHistoryScreen() {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const user = auth().currentUser;
+    if (!user) return;
+    const unsub = firestore()
+      .collection('payments')
+      .where('driverId', '==', user.uid)
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .onSnapshot(
+        snap => {
+          const rows = snap.docs.map(doc => {
+            const d = doc.data();
+            const t = d.createdAt?.toDate?.() || new Date();
+            return {
+              id: doc.id,
+              date: `${t.toLocaleDateString()} ${t.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}`,
+              amount: `$${Number(d.amount || 0).toFixed(2)}`,
+              method: d.method || 'unknown',
+              status: d.status || 'succeeded',
+            };
+          });
+          setPayments(rows);
+          setLoading(false);
+        },
+        () => setLoading(false),
+      );
+    return unsub;
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.header}>Earning History</Text>
 
-      <FlatList
-        data={earnings}
-        keyExtractor={item => item.id}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View>
-              <Text style={styles.date}>{item.date}</Text>
-              <Text style={styles.label}>Completed Ride</Text>
+      {loading ? (
+        <View style={{ padding: 20 }}>
+          <Text style={{ color: '#FFFCFB' }}>Loading...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={payments}
+          keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View>
+                <Text style={styles.date}>{item.date}</Text>
+                <Text style={styles.label}>Payment ({item.method})</Text>
+              </View>
+              <Text style={styles.amount}>{item.amount}</Text>
             </View>
-            <Text style={styles.amount}>{item.amount}</Text>
-          </View>
-        )}
-      />
+          )}
+          ListEmptyComponent={() => (
+            <View style={{ padding: 20 }}>
+              <Text style={{ color: '#B0B0B0' }}>No earnings yet.</Text>
+            </View>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }

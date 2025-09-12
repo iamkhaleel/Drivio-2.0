@@ -6,15 +6,54 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import auth from '@react-native-firebase/auth';
 
 export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSendLink = () => {
-    console.log('Reset link sent to:', email);
-    navigation.navigate('EmailVerification'); // go to verification after sending
+  // Simple email validation regex
+  const isValidEmail = email => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
+  const handleSendLink = async () => {
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter an email address.');
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      Alert.alert('Error', 'Please enter a valid email address.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await auth().sendPasswordResetEmail(email.trim());
+      Alert.alert(
+        'Email Sent',
+        'A password reset link has been sent to your email.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Login') }],
+      );
+    } catch (e) {
+      let message = 'Failed to send reset email.';
+      if (e.code === 'auth/user-not-found') {
+        message = 'No account found with this email.';
+      } else if (e.code === 'auth/invalid-email') {
+        message = 'Invalid email address.';
+      } else if (e.code === 'auth/too-many-requests') {
+        message = 'Too many attempts. Please try again later.';
+      }
+      Alert.alert('Error', message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -31,12 +70,22 @@ export default function ForgotPasswordScreen({ navigation }) {
           placeholder="Email"
           placeholderTextColor="#ccc"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={text => setEmail(text.trim())} // Trim on input
+          keyboardType="email-address"
+          autoCapitalize="none"
         />
 
         {/* Send Link Button */}
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSendLink}>
-          <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+        <TouchableOpacity
+          style={[styles.primaryButton, isLoading && styles.disabledButton]}
+          onPress={handleSendLink}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+          )}
         </TouchableOpacity>
 
         {/* Back to Login */}
@@ -77,6 +126,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   footerText: { color: '#ccc', textAlign: 'center', marginTop: 20 },
 });

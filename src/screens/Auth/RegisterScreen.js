@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import {
   GoogleSignin,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
-import { useEffect } from 'react';
 
 export default function RegisterScreen({ navigation }) {
   const [username, setUsername] = useState('');
@@ -37,80 +36,117 @@ export default function RegisterScreen({ navigation }) {
       });
     } catch (error) {
       console.error('Google Sign-in configuration error:', error);
+      Alert.alert(
+        'Error',
+        'Failed to configure Google Sign-in. Please try again.',
+      );
     }
   };
 
   const handleGoogleSignIn = async () => {
     try {
-      // Prompt user to sign in with Google
       await GoogleSignin.hasPlayServices();
       const { idToken } = await GoogleSignin.signIn();
 
-      // Create Firebase credential with the token
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-
-      // Sign in with credential
       const userCredential = await auth().signInWithCredential(
         googleCredential,
       );
       const user = userCredential.user;
 
-      // Check if user exists in Firestore
       const userDoc = await firestore().collection('users').doc(user.uid).get();
       if (!userDoc.exists) {
-        await firestore().collection('users').doc(user.uid).set({
-          username: user.displayName,
-          email: user.email,
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+        await firestore()
+          .collection('users')
+          .doc(user.uid)
+          .set({
+            username: user.displayName || username,
+            email: user.email,
+            role: 'rider',
+            createdAt: firestore.FieldValue.serverTimestamp(),
+          });
       }
 
-      Alert.alert('Success', `Welcome ${user.displayName}!`);
-      navigation.navigate('Home'); // or wherever you want
+      Alert.alert('Success', `Welcome ${user.displayName || username}!`);
+      navigation.navigate('Home');
     } catch (err) {
       console.error('Google Sign-In error:', err);
-      Alert.alert('Error', err.message || 'Google Sign-In failed');
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert('Cancelled', 'Google Sign-In was cancelled.');
+      } else if (err.code === statusCodes.IN_PROGRESS) {
+        Alert.alert('In Progress', 'Another sign-in is in progress.');
+      } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Error', 'Play Services not available or outdated.');
+      } else {
+        Alert.alert('Error', err.message || 'Google Sign-In failed');
+      }
     }
   };
 
   const handleSignUp = async () => {
+    // Basic validation
+    if (!email || !password || !username) {
+      Alert.alert('Error', 'Please fill all fields.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters.');
+      return;
+    }
+
     try {
-      // Create user
       const userCredential = await auth().createUserWithEmailAndPassword(
-        email,
+        email.trim(),
         password,
       );
       const user = userCredential.user;
 
-      // Update user profile
-      await user.updateProfile({ displayName: username });
+      await user.updateProfile({ displayName: username.trim() });
 
-      // Save user info in Firestore
       await firestore().collection('users').doc(user.uid).set({
-        username: username,
-        email: email,
+        username: username.trim(),
+        email: email.trim(),
+        role: 'rider',
         createdAt: firestore.FieldValue.serverTimestamp(),
       });
 
-      // Send email verification
       await user.sendEmailVerification();
 
       Alert.alert('Success', 'Account created! Please verify your email.', [
         { text: 'OK', onPress: () => navigation.navigate('Login') },
       ]);
     } catch (err) {
-      console.error('Sign-up error:', err.message);
-      Alert.alert('Error', err.message || 'Sign-up failed');
+      console.error('Sign-up error:', err);
+      let errorMessage = 'Sign-up failed';
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/email-already-in-use':
+            errorMessage = 'This email is already in use.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'Invalid email format.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'Password should be at least 6 characters.';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = 'Network error. Please check your connection.';
+            break;
+          default:
+            errorMessage = err.message || errorMessage;
+        }
+      } else {
+        errorMessage = 'An unexpected error occurred. Please try again.';
+      }
+      Alert.alert('Error', errorMessage);
     }
   };
 
   return (
     <LinearGradient colors={['#0F0E0E', '#FFFCFB']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Title */}
         <Text style={styles.title}>Sign up</Text>
 
-        {/* Username Input */}
         <TextInput
           style={styles.input}
           placeholder="Username"
@@ -119,7 +155,6 @@ export default function RegisterScreen({ navigation }) {
           onChangeText={setUsername}
         />
 
-        {/* Email Input */}
         <TextInput
           style={styles.input}
           placeholder="Email"
@@ -127,9 +162,9 @@ export default function RegisterScreen({ navigation }) {
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
+          autoCapitalize="none"
         />
 
-        {/* Password Input */}
         <TextInput
           style={styles.input}
           placeholder="Password"
@@ -137,17 +172,22 @@ export default function RegisterScreen({ navigation }) {
           secureTextEntry
           value={password}
           onChangeText={setPassword}
+          autoCapitalize="none"
         />
 
-        {/* Register Button */}
         <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp}>
-          <Text style={styles.primaryButtonText}>Sign up</Text>
+          <Text style={styles.primaryButtonText}>Sign up as Rider</Text>
         </TouchableOpacity>
 
-        {/* Divider */}
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => navigation.navigate('DriverRegister')}
+        >
+          <Text style={styles.primaryButtonText}>Sign up as Driver</Text>
+        </TouchableOpacity>
+
         <Text style={styles.orText}>Or sign up with</Text>
 
-        {/* Social Buttons */}
         <View style={styles.socialContainer}>
           <TouchableOpacity
             style={styles.socialButton}

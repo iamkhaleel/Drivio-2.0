@@ -67,6 +67,8 @@ export default function ProfileScreen({ navigation }) {
     try {
       await auth().signOut();
       await AsyncStorage.removeItem('userLoggedIn');
+      // Reset navigation stack to Login screen
+      navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
     } catch (error) {
       Alert.alert('Logout Error', error.message);
     }

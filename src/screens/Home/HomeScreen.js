@@ -10,6 +10,8 @@ import {
   ScrollView,
   Modal,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -18,71 +20,34 @@ import MapViewDirections from 'react-native-maps-directions';
 import Geolocation from '@react-native-community/geolocation';
 import NetInfo from '@react-native-community/netinfo';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import {
+  calculateDistance,
+  calculateFare,
+  findNearbyDrivers,
+  createRideRequest,
+  subscribeToRide,
+  updateRideComplete,
+} from '../../utils/RideService';
 import 'react-native-get-random-values';
 
 const { width, height } = Dimensions.get('window');
 const GOOGLE_MAPS_APIKEY = 'AIzaSyDVHGYwW8ZjOxqLDxNjhp4LGBSer3K4o-g';
-
-// Mock data for rides with driver and car images
-const mockRides = [
-  {
-    id: '1',
-    driverName: 'John Doe',
-    carModel: 'Toyota Camry',
-    licensePlate: 'ABC123',
-    rating: 4.8,
-    price: 15.5,
-    eta: '5 min',
-    carColor: 'Black',
-    paymentMethods: ['stripe', 'bank_transfer'],
-    bankAccount: '****1234',
-    driverImage:
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-    carImage:
-      'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=200&h=120&fit=crop',
-  },
-  {
-    id: '2',
-    driverName: 'Jane Smith',
-    carModel: 'Honda Civic',
-    licensePlate: 'XYZ789',
-    rating: 4.9,
-    price: 12.75,
-    eta: '3 min',
-    carColor: 'White',
-    paymentMethods: ['stripe'],
-    bankAccount: '****5678',
-    driverImage:
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-    carImage:
-      'https://images.unsplash.com/photo-1542362567-b07e54358753?w=200&h=120&fit=crop',
-  },
-  {
-    id: '3',
-    driverName: 'Mike Johnson',
-    carModel: 'Tesla Model 3',
-    licensePlate: 'TESLA1',
-    rating: 4.7,
-    price: 18.25,
-    eta: '7 min',
-    carColor: 'Red',
-    paymentMethods: ['stripe', 'bank_transfer'],
-    bankAccount: '****9012',
-    driverImage:
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-    carImage:
-      'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=200&h=120&fit=crop',
-  },
-];
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [destination, setDestination] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
   const [showRides, setShowRides] = useState(false);
-  const [selectedRide, setSelectedRide] = useState(null);
+  const [availableDrivers, setAvailableDrivers] = useState([]);
+  const [selectedDriver, setSelectedDriver] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('');
+  const [distance, setDistance] = useState(null);
+  const [estimatedFare, setEstimatedFare] = useState(null);
+  const [rideStatus, setRideStatus] = useState(null);
+  const [rideId, setRideId] = useState(null);
   const mapRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -115,6 +80,11 @@ export default function HomeScreen() {
     setDestination(selectedLocation);
 
     if (location && selectedLocation) {
+      const calculatedDistance = calculateDistance(location, selectedLocation);
+      setDistance(calculatedDistance);
+      const fare = calculateFare(calculatedDistance);
+      setEstimatedFare(fare);
+
       const coordinates = [location, selectedLocation];
       mapRef.current.fitToCoordinates(coordinates, {
         edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
@@ -123,35 +93,117 @@ export default function HomeScreen() {
     }
   };
 
-  const handleGoButtonPress = () => {
-    if (destination && location) {
-      setShowRides(true);
-      console.log('Finding available rides...');
+  const handleGoButtonPress = async () => {
+    if (!location || !destination) {
+      Alert.alert(
+        'Error',
+        'Please select both pickup and destination locations.',
+      );
+      return;
+    }
+
+    try {
+      setShowRides(true); // Show modal with drivers
+      const drivers = await findNearbyDrivers(location); // Fetch real drivers
+      setAvailableDrivers(drivers);
+    } catch (error) {
+      console.error('Error finding drivers:', error);
+      Alert.alert('Error', 'Unable to find nearby drivers.');
     }
   };
 
   const handleDirectionsReady = result => {
     console.log('Directions ready:', result);
+    if (result.distance) {
+      setDistance(result.distance);
+      setEstimatedFare(calculateFare(result.distance));
+    }
   };
 
-  const handleRideSelect = ride => {
-    setSelectedRide(ride);
+  const handleRideSelect = driver => {
+    setSelectedDriver(driver);
     setShowRides(false);
   };
 
-  const handleConfirmRide = () => {
-    setShowPayment(true);
+  const handleConfirmRide = async () => {
+    if (!selectedDriver || !estimatedFare) return;
+
+    try {
+      const riderId = auth().currentUser.uid;
+      const newRideId = await createRideRequest({
+        pickup: location,
+        destination: destination,
+        riderId,
+        estimatedFare,
+        paymentMethod: paymentMethod || 'stripe', // Default to stripe if not set
+      });
+      setRideId(newRideId);
+
+      // Subscribe to ride status updates
+      const unsubscribe = subscribeToRide(newRideId, ride => {
+        setRideStatus(ride.status);
+        if (ride.status === 'accepted') {
+          const displayName =
+            selectedDriver?.driverName ||
+            selectedDriver?.fullName ||
+            selectedDriver?.username ||
+            'your driver';
+          Alert.alert(
+            'Ride Accepted',
+            `${displayName} has accepted your ride!`,
+          );
+          // Show payment now that the driver accepted
+          setShowPayment(true);
+        } else if (ride.status === 'declined') {
+          Alert.alert('Ride Declined', 'Driver declined your request.');
+          setSelectedDriver(null);
+        } else if (ride.status === 'completed') {
+          Alert.alert('Ride Completed', 'Your ride has ended.');
+        }
+      });
+    } catch (error) {
+      console.error('Error confirming ride:', error);
+      Alert.alert('Error', 'Failed to confirm ride.');
+    }
   };
 
-  const handlePayment = method => {
-    setPaymentMethod(method);
-    console.log(`Processing payment with ${method} for ride:`, selectedRide);
-    // Simulate payment processing
-    setTimeout(() => {
+  const handlePayment = async method => {
+    try {
+      if (!rideId || !selectedDriver || !estimatedFare) {
+        Alert.alert('Error', 'Missing ride details. Please try again.');
+        return;
+      }
+      setPaymentMethod(method);
+
+      // Create a payment record (for testing, mark as succeeded)
+      const paymentRef = await firestore()
+        .collection('payments')
+        .add({
+          rideId,
+          driverId: selectedDriver.id,
+          riderId: auth().currentUser.uid,
+          method,
+          amount: Number(estimatedFare),
+          currency: 'usd',
+          status: 'succeeded',
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+
+      // Update earnings and mark ride as completed
+      await updateRideComplete(
+        rideId,
+        selectedDriver.id,
+        Number(estimatedFare),
+      );
+
       setShowPayment(false);
-      setSelectedRide(null);
-      alert('Payment successful! Your ride is on the way.');
-    }, 2000);
+      setSelectedDriver(null);
+      setRideId(null);
+      Alert.alert('Payment Successful', 'Your ride is on the way!');
+    } catch (err) {
+      console.error('Payment error:', err);
+      Alert.alert('Payment Failed', 'Could not process payment.');
+    }
   };
 
   const renderRideItem = ({ item }) => (
@@ -174,7 +226,7 @@ export default function HomeScreen() {
         <Text style={styles.licensePlate}>{item.licensePlate}</Text>
         <View style={styles.ratingContainer}>
           <Icon name="star" size={16} color="#FFD700" />
-          <Text style={styles.rating}>{item.rating}</Text>
+          <Text style={styles.rating}>{item.rating?.toFixed(1) || 'N/A'}</Text>
         </View>
       </View>
       <View style={styles.carImageContainer}>
@@ -187,8 +239,13 @@ export default function HomeScreen() {
         />
       </View>
       <View style={styles.ridePrice}>
-        <Text style={styles.price}>${item.price}</Text>
-        <Text style={styles.eta}>{item.eta}</Text>
+        <Text style={styles.price}>
+          ${calculateFare(item.distance).toFixed(2)}
+        </Text>
+        <Text style={styles.eta}>
+          ETA: {Math.round(item.distance / 0.3)} min
+        </Text>
+        {/* Rough ETA estimate */}
       </View>
     </TouchableOpacity>
   );
@@ -291,7 +348,6 @@ export default function HomeScreen() {
             provider="google"
           >
             <Marker coordinate={location} title="You are here" />
-
             {destination && (
               <Marker
                 coordinate={destination}
@@ -300,7 +356,6 @@ export default function HomeScreen() {
                 pinColor="red"
               />
             )}
-
             {destination && location && (
               <MapViewDirections
                 origin={location}
@@ -309,27 +364,34 @@ export default function HomeScreen() {
                 strokeWidth={4}
                 strokeColor="#0066FF"
                 onReady={handleDirectionsReady}
-                onError={errorMessage => {
-                  console.log('Directions error:', errorMessage);
-                }}
+                onError={errorMessage =>
+                  console.log('Directions error:', errorMessage)
+                }
               />
             )}
+            {availableDrivers.map(driver => (
+              <Marker
+                key={driver.id}
+                coordinate={driver.currentLocation}
+                title={driver.driverName}
+                pinColor="green"
+              />
+            ))}
           </MapView>
         ) : (
           <View style={styles.fakeMap}>
-            <Text style={styles.mapText}>Loading map...</Text>
+            <ActivityIndicator size="large" color="#FFFCFB" />
           </View>
         )}
 
-        {/* Top Overlay Buttons */}
-        <View style={styles.topButtons}>
+        {/* <View style={styles.topButtons}>
           <TouchableOpacity style={styles.circleButton}>
             <Icon name="menu" size={24} color="#fff" />
           </TouchableOpacity>
           <View style={styles.earningsBadge}>
             <Text style={styles.earningsText}>$36.45</Text>
-          </View>
-        </View>
+          </View> 
+        </View> */}
 
         {/* Bottom Buttons */}
         <View style={styles.bottomContainer}>
@@ -355,27 +417,35 @@ export default function HomeScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Available Rides</Text>
+              <Text style={styles.modalTitle}>Available Drivers</Text>
               <TouchableOpacity onPress={() => setShowRides(false)}>
                 <Icon name="close" size={24} color="#000" />
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={mockRides}
-              renderItem={renderRideItem}
-              keyExtractor={item => item.id}
-              style={styles.ridesList}
-            />
+            {availableDrivers.length > 0 ? (
+              <FlatList
+                data={availableDrivers}
+                renderItem={renderRideItem}
+                keyExtractor={item => item.id}
+                style={styles.ridesList}
+              />
+            ) : (
+              <View style={styles.noDrivers}>
+                <Text style={styles.noDriversText}>
+                  No drivers available nearby.
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
 
       {/* Selected Ride Details */}
-      {selectedRide && (
+      {selectedDriver && (
         <View style={styles.rideDetails}>
           <View style={styles.rideDetailsHeader}>
             <Text style={styles.rideDetailsTitle}>Ride Details</Text>
-            <TouchableOpacity onPress={() => setSelectedRide(null)}>
+            <TouchableOpacity onPress={() => setSelectedDriver(null)}>
               <Icon name="close" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -383,7 +453,7 @@ export default function HomeScreen() {
             <View style={styles.driverInfoContainer}>
               <View style={styles.driverImageContainerLarge}>
                 <Image
-                  source={{ uri: selectedRide.driverImage }}
+                  source={{ uri: selectedDriver.driverImage }}
                   style={styles.driverImageLarge}
                   onError={e =>
                     console.log('Image load error:', e.nativeEvent.error)
@@ -392,23 +462,25 @@ export default function HomeScreen() {
               </View>
               <View style={styles.driverTextInfo}>
                 <Text style={styles.driverNameLarge}>
-                  {selectedRide.driverName}
+                  {selectedDriver.driverName}
                 </Text>
                 <Text style={styles.carInfoLarge}>
-                  {selectedRide.carModel} • {selectedRide.carColor}
+                  {selectedDriver.carModel} • {selectedDriver.carColor}
                 </Text>
                 <Text style={styles.licensePlateLarge}>
-                  {selectedRide.licensePlate}
+                  {selectedDriver.licensePlate}
                 </Text>
                 <View style={styles.ratingContainerLarge}>
                   <Icon name="star" size={20} color="#FFD700" />
-                  <Text style={styles.ratingLarge}>{selectedRide.rating}</Text>
+                  <Text style={styles.ratingLarge}>
+                    {selectedDriver.rating?.toFixed(1) || 'N/A'}
+                  </Text>
                 </View>
               </View>
             </View>
             <View style={styles.carImageContainerLarge}>
               <Image
-                source={{ uri: selectedRide.carImage }}
+                source={{ uri: selectedDriver.carImage }}
                 style={styles.carImageLarge}
                 onError={e =>
                   console.log('Car image load error:', e.nativeEvent.error)
@@ -416,8 +488,12 @@ export default function HomeScreen() {
               />
             </View>
             <View style={styles.priceContainer}>
-              <Text style={styles.priceLarge}>${selectedRide.price}</Text>
-              <Text style={styles.etaLarge}>ETA: {selectedRide.eta}</Text>
+              <Text style={styles.priceLarge}>
+                ${estimatedFare?.toFixed(2) || 'N/A'}
+              </Text>
+              <Text style={styles.etaLarge}>
+                ETA: {Math.round(distance / 0.3)} min
+              </Text>
             </View>
           </View>
           <TouchableOpacity
@@ -440,7 +516,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.paymentAmount}>
-              Amount: ${selectedRide?.price}
+              Amount: ${estimatedFare?.toFixed(2) || selectedDriver?.price}
             </Text>
 
             <TouchableOpacity
@@ -451,15 +527,17 @@ export default function HomeScreen() {
               <Text style={styles.paymentOptionText}>Pay with Stripe</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.paymentOption}
-              onPress={() => handlePayment('bank_transfer')}
-            >
-              <Icon name="business" size={24} color="#0066FF" />
-              <Text style={styles.paymentOptionText}>
-                Bank Transfer to {selectedRide?.bankAccount}
-              </Text>
-            </TouchableOpacity>
+            {selectedDriver?.paymentMethods?.includes('bank_transfer') && (
+              <TouchableOpacity
+                style={styles.paymentOption}
+                onPress={() => handlePayment('bank_transfer')}
+              >
+                <Icon name="business" size={24} color="#0066FF" />
+                <Text style={styles.paymentOptionText}>
+                  Bank Transfer to {selectedDriver.bankAccount}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
@@ -787,5 +865,15 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
     color: '#000',
+  },
+  noDrivers: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  noDriversText: {
+    color: '#666',
+    fontSize: 16,
   },
 });

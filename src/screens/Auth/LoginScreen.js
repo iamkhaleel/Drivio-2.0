@@ -50,7 +50,7 @@ export default function LoginScreen({ navigation }) {
         } else {
           navigation.reset({
             index: 0,
-            routes: [{ name: 'Home' }],
+            routes: [{ name: 'Main' }],
           });
         }
       } else {
@@ -85,21 +85,40 @@ export default function LoginScreen({ navigation }) {
     setIsLoading(true);
     try {
       const userCredential = await auth().signInWithEmailAndPassword(
-        email,
+        email.trim(),
         password,
       );
       const user = userCredential.user;
 
       if (!user.emailVerified) {
         Alert.alert('Email Not Verified', 'Please verify your email first.');
-        setIsLoading(false);
         return;
       }
 
       await redirectBasedOnRole(user.uid);
     } catch (err) {
       console.error('Login error:', err.message);
-      Alert.alert('Login Error', err.message || 'Failed to log in.');
+      let message = 'Failed to log in.';
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/invalid-email':
+            message = 'Invalid email address.';
+            break;
+          case 'auth/user-not-found':
+            message = 'No account found for this email.';
+            break;
+          case 'auth/wrong-password':
+            message = 'Incorrect password.';
+            break;
+          case 'auth/network-request-failed':
+            message = 'Network error. Please check your connection.';
+            break;
+          default:
+            message = err.message || message;
+        }
+      }
+      Alert.alert('Login Error', message);
+    } finally {
       setIsLoading(false);
     }
   };

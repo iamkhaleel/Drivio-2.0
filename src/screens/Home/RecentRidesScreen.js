@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,83 +8,104 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 export default function RecentRidesScreen() {
-  const [rides] = useState([
-    {
-      id: '1',
-      pickup: 'Downtown',
-      destination: 'Airport',
-      date: 'Aug 25, 2025',
-      time: '10:30 AM',
-      fare: '$15.00',
-      status: 'Completed',
-    },
-    {
-      id: '2',
-      pickup: 'Mall Road',
-      destination: 'City Center',
-      date: 'Aug 24, 2025',
-      time: '08:15 PM',
-      fare: '$12.50',
-      status: 'Canceled',
-    },
-    {
-      id: '3',
-      pickup: 'City Hospital',
-      destination: 'Green Park',
-      date: 'Aug 22, 2025',
-      time: '03:45 PM',
-      fare: '$11.20',
-      status: 'Completed',
-    },
-    {
-      id: '4',
-      pickup: 'Central Library',
-      destination: 'North Market',
-      date: 'Aug 21, 2025',
-      time: '09:00 AM',
-      fare: '$14.50',
-      status: 'Completed',
-    },
-    {
-      id: '5',
-      pickup: 'East Gate',
-      destination: 'Tech Hub',
-      date: 'Aug 20, 2025',
-      time: '06:15 PM',
-      fare: '$8.30',
-      status: 'Completed',
-    },
-    {
-      id: '6',
-      pickup: 'City Mall',
-      destination: 'Harbor View',
-      date: 'Aug 18, 2025',
-      time: '12:20 PM',
-      fare: '$17.00',
-      status: 'Canceled',
-    },
-    {
-      id: '7',
-      pickup: 'University Ave',
-      destination: 'Metro Station',
-      date: 'Aug 17, 2025',
-      time: '08:50 PM',
-      fare: '$6.75',
-      status: 'Completed',
-    },
+  const [rides, setRides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-    {
-      id: '8',
-      pickup: 'Washington St',
-      destination: 'Michigan Ave',
-      date: 'Aug 28, 2025',
-      time: '10:10 AM',
-      fare: '$9.75',
-      status: 'canceled',
-    },
-  ]);
+  useEffect(() => {
+    const user = auth().currentUser;
+    if (!user) return;
+    const unsub = firestore()
+      .collection('rides')
+      .where('riderId', '==', user.uid)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .onSnapshot(
+        snap => {
+          const items = snap.docs.map(doc => {
+            const d = doc.data();
+            const created = d.createdAt?.toDate?.() || new Date();
+            return {
+              id: doc.id,
+              pickup:
+                typeof d.pickup === 'string'
+                  ? d.pickup
+                  : d.pickup?.address || 'Pickup',
+              destination:
+                typeof d.destination === 'string'
+                  ? d.destination
+                  : d.destination?.address || 'Destination',
+              date: created.toLocaleDateString(),
+              time: created.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              fare:
+                typeof d.estimatedFare === 'number'
+                  ? `$${d.estimatedFare.toFixed(2)}`
+                  : '$0.00',
+              status: (d.status || 'pending').replace(/\b\w/g, c =>
+                c.toUpperCase(),
+              ),
+            };
+          });
+          setRides(items);
+          setLoading(false);
+        },
+        () => setLoading(false),
+      );
+    return unsub;
+  }, []);
+
+  const refreshRides = async () => {
+    try {
+      const user = auth().currentUser;
+      if (!user) return;
+      setRefreshing(true);
+      const snap = await firestore()
+        .collection('rides')
+        .where('riderId', '==', user.uid)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get();
+      const items = snap.docs.map(doc => {
+        const d = doc.data();
+        const created = d.createdAt?.toDate?.() || new Date();
+        return {
+          id: doc.id,
+          pickup:
+            typeof d.pickup === 'string'
+              ? d.pickup
+              : d.pickup?.address || 'Pickup',
+          destination:
+            typeof d.destination === 'string'
+              ? d.destination
+              : d.destination?.address || 'Destination',
+          date: created.toLocaleDateString(),
+          time: created.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          fare:
+            typeof d.estimatedFare === 'number'
+              ? `$${d.estimatedFare.toFixed(2)}`
+              : '$0.00',
+          status: (d.status || 'pending').replace(/\b\w/g, c =>
+            c.toUpperCase(),
+          ),
+        };
+      });
+      setRides(items);
+    } catch (e) {
+      // ignore
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const getStatusColor = status => {
     switch (status) {
@@ -125,12 +146,18 @@ export default function RecentRidesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Recent Rides</Text>
-      {rides.length > 0 ? (
+      {loading ? (
+        <View style={styles.noRidesContainer}>
+          <Text style={styles.noRidesText}>Loading...</Text>
+        </View>
+      ) : rides.length > 0 ? (
         <FlatList
           data={rides}
           keyExtractor={item => item.id}
           renderItem={renderRide}
           contentContainerStyle={{ paddingBottom: 20 }}
+          refreshing={refreshing}
+          onRefresh={refreshRides}
         />
       ) : (
         <View style={styles.noRidesContainer}>
