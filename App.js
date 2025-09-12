@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import LottieView from 'lottie-react-native';
 
 import OnboardingScreen from './src/screens/Onboarding/OnboardingScreen';
 import LoginScreen from './src/screens/Auth/LoginScreen';
@@ -23,6 +24,7 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(async user => {
+      let route;
       if (user) {
         const userDoc = await firestore()
           .collection('users')
@@ -30,11 +32,16 @@ export default function App() {
           .get();
         const role = userDoc.exists ? userDoc.data().role : 'rider';
         await AsyncStorage.setItem('userRole', role);
-        setInitialRoute(role === 'driver' ? 'DriverHome' : 'Main');
+        route = role === 'driver' ? 'DriverHome' : 'Main';
       } else {
-        setInitialRoute('Onboarding');
+        route = 'Onboarding';
       }
-      setIsLoading(false);
+
+      // force splash screen to stay for at least 2s
+      setTimeout(() => {
+        setInitialRoute(route);
+        setIsLoading(false);
+      }, 2000);
     });
 
     return unsubscribe;
@@ -47,10 +54,14 @@ export default function App() {
           flex: 1,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: '#0F0E0E',
         }}
       >
-        <ActivityIndicator size="large" color="#FFFCFB" />
+        <LottieView
+          source={require('./src/assets/images/Blocks.json')}
+          autoPlay
+          loop
+          style={{ width: 200, height: 200 }}
+        />
       </View>
     );
   }

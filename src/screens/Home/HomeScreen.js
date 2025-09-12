@@ -47,6 +47,8 @@ export default function HomeScreen() {
   const [distance, setDistance] = useState(null);
   const [estimatedFare, setEstimatedFare] = useState(null);
   const [rideStatus, setRideStatus] = useState(null);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+
   const [rideId, setRideId] = useState(null);
   const mapRef = useRef(null);
   const inputRef = useRef(null);
@@ -103,12 +105,15 @@ export default function HomeScreen() {
     }
 
     try {
-      setShowRides(true); // Show modal with drivers
-      const drivers = await findNearbyDrivers(location); // Fetch real drivers
+      setShowRides(true); // open modal
+      setLoadingDrivers(true); // show spinner
+      const drivers = await findNearbyDrivers(location);
       setAvailableDrivers(drivers);
     } catch (error) {
       console.error('Error finding drivers:', error);
       Alert.alert('Error', 'Unable to find nearby drivers.');
+    } finally {
+      setLoadingDrivers(false); // stop spinner
     }
   };
 
@@ -422,7 +427,10 @@ export default function HomeScreen() {
                 <Icon name="close" size={24} color="#000" />
               </TouchableOpacity>
             </View>
-            {availableDrivers.length > 0 ? (
+
+            {loadingDrivers ? (
+              <ActivityIndicator size="large" color="#0066FF" />
+            ) : availableDrivers && availableDrivers.length > 0 ? (
               <FlatList
                 data={availableDrivers}
                 renderItem={renderRideItem}
@@ -568,7 +576,7 @@ const styles = StyleSheet.create({
   },
   fakeMap: {
     width: '100%',
-    height: '100%',
+    height: '110%',
     backgroundColor: '#222',
     justifyContent: 'center',
     alignItems: 'center',
@@ -605,7 +613,7 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     position: 'absolute',
-    bottom: 90,
+    bottom: '5%',
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
@@ -867,13 +875,12 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   noDrivers: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 30,
   },
   noDriversText: {
-    color: '#666',
+    color: 'black',
     fontSize: 16,
   },
 });
