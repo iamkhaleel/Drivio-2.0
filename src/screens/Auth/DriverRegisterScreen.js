@@ -141,62 +141,125 @@ export default function DriverRegisterScreen({ navigation }) {
   };
 
   const handleSignUp = async () => {
+    // Basic validation including bank account required
+    if (!email || !password || !username || !fullName || !bankAccount) {
+      Alert.alert(
+        'Error',
+        'Please fill all required fields including bank account.',
+      );
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters.');
+      return;
+    }
+    if (!/^[0-9]{6,}$/.test(bankAccount)) {
+      Alert.alert('Error', 'Enter a valid bank account number.');
+      return;
+    }
+    setUploading(true);
     try {
-      if (!driverImage || !carImage) {
-        Alert.alert('Error', 'Please upload both driver and car images');
-        return;
-      }
-      const userCredential = await auth().createUserWithEmailAndPassword(
+      // Create user with email/password
+      const { user } = await auth().createUserWithEmailAndPassword(
         email,
         password,
       );
-      const user = userCredential.user;
-      await user.updateProfile({ displayName: username });
 
-      const driverImageURL = await uploadImage(
-        driverImage,
-        `drivers/${user.uid}/profile.jpg`,
-      );
-      const carImageURL = await uploadImage(
-        carImage,
-        `drivers/${user.uid}/car.jpg`,
-      );
+      // Upload images if selected
+      let driverImageUrl = '';
+      let carImageUrl = '';
+      if (driverImage) {
+        const driverRef = storage().ref(`drivers/${user.uid}/driver.jpg`);
+        await driverRef.putFile(driverImage.uri);
+        driverImageUrl = await driverRef.getDownloadURL();
+      }
+      if (carImage) {
+        const carRef = storage().ref(`drivers/${user.uid}/car.jpg`);
+        await carRef.putFile(carImage.uri);
+        carImageUrl = await carRef.getDownloadURL();
+      }
 
+      // Store user basics in 'users' collection with role
       await firestore().collection('users').doc(user.uid).set({
-        username: username,
-        email: email,
-        role: 'driver',
+        username,
+        email,
+        role: 'driver', // Set role
         createdAt: firestore.FieldValue.serverTimestamp(),
-        profileCompleted: true,
-      });
-
-      await firestore().collection('drivers').doc(user.uid).set({
-        userId: user.uid,
-        fullName: fullName,
-        carModel: carModel,
-        carColor: carColor,
-        licensePlate: licensePlate,
-        bankAccount: bankAccount,
-        driverLicense: driverLicense,
-        driverImage: driverImageURL,
-        carImage: carImageURL,
-        isAvailable: false,
-        rating: 0,
-        totalRides: 0,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        profileCompleted: true,
       });
 
       await user.sendEmailVerification();
+
+      // Store driver-specific details in 'drivers' collection
+      await firestore().collection('drivers').doc(user.uid).set({
+        fullName,
+        carModel,
+        carColor,
+        licensePlate,
+        bankAccount,
+        driverLicense,
+        driverImage: driverImageUrl,
+        carImage: carImageUrl,
+        isAvailable: false, // Default
+        isOnline: false, // Default
+        totalEarnings: 0,
+        totalRides: 0,
+        rating: 0,
+        totalRatings: 0,
+        currentLocation: null, // Will be updated later
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Success alert
       Alert.alert(
         'Success',
-        'Driver account created! Please verify your email.',
-        [{ text: 'OK', onPress: () => navigation.navigate('DriverHome') }],
+        'Driver registration complete!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Additional alert to check email
+              Alert.alert(
+                'Verify Your Email',
+                'Please check your inbox (and spam/junk folder) to verify your email before logging in. Once verified, you can log in.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => navigation.navigate('DriverHome'),
+                  },
+                ],
+              );
+            },
+          },
+        ],
+        { cancelable: false },
       );
-    } catch (err) {
-      console.error('Sign-up error:', err.message);
-      Alert.alert('Error', err.message || 'Sign-up failed');
+    } catch (error) {
+      // ... (existing error handling)
+      console.error('Sign-up error:', error);
+      let errorMessage = 'Sign-up failed';
+      if (error.code) {
+        switch (error.code) {
+          case 'auth/email-already-in-use':
+            errorMessage = 'This email is already in use.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'Invalid email format.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'Password should be at least 6 characters.';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = 'Network error. Please check your connection.';
+            break;
+          default:
+            errorMessage = error.message || errorMessage;
+        }
+      } else {
+        errorMessage = 'An unexpected error occurred. Please try again.';
+      }
+      Alert.alert('Error', errorMessage);
     }
+    setUploading(false);
   };
 
   return (
@@ -319,17 +382,7 @@ export default function DriverRegisterScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
 
-        <Text style={styles.orText}>Or sign up with</Text>
-
         <View style={styles.socialContainer}>
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={handleGoogleSignIn}
-            disabled={uploading}
-          >
-            <Icon name="google" size={20} color="#fff" />
-            <Text style={styles.socialText}>Sign up with Google</Text>
-          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
             <Text style={styles.footerText}>
               Already have an account? Log in

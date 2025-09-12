@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,34 @@ import {
   Dimensions,
   Image,
   TouchableOpacity,
-  Switch,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { DrawerLayout } from 'react-native-gesture-handler';
 import LinearGradient from 'react-native-linear-gradient';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import Geolocation from '@react-native-community/geolocation';
+import {
+  updateDriverStatus,
+  subscribeToNearbyRequests,
+  acceptRideRequest,
+  declineRideRequest,
+} from '../../utils/RideService';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function DriverHomeScreen({ navigation }) {
+  const driverId = auth().currentUser?.uid;
+  const [driverData, setDriverData] = useState({
+    name: 'Loading...',
+    profileImageUrl: 'https://via.placeholder.com/150',
+    vehicleOwner: 'Loading...',
+    vehicleName: 'Loading...',
+    totalEarnings: 0,
+  });
   const [isAvailable, setIsAvailable] = useState(false);
   const [currentLocation, setCurrentLocation] = useState({
     latitude: 37.78825,
@@ -24,13 +41,92 @@ export default function DriverHomeScreen({ navigation }) {
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   });
-  const [earnings, setEarnings] = useState(459);
   const [currentRide, setCurrentRide] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef(null);
+  const mapRef = useRef(null);
 
-  const toggleAvailability = () => {
-    setIsAvailable(!isAvailable);
+  // Fetch driver data
+  useEffect(() => {
+    if (!driverId) return;
+    const unsubscribe = firestore()
+      .collection('drivers')
+      .doc(driverId)
+      .onSnapshot(
+        doc => {
+          if (doc.exists) {
+            const data = doc.data();
+            setDriverData({
+              name: data.fullName || 'Unknown Driver',
+              profileImageUrl:
+                data.driverImage || 'https://via.placeholder.com/150',
+              vehicleOwner: data.fullName || 'Unknown Owner',
+              vehicleName: data.carModel || 'Unknown Vehicle',
+              totalEarnings: data.totalEarnings || 0,
+            });
+            setIsAvailable(data.isAvailable || false);
+          } else {
+            Alert.alert('Error', 'Driver profile not found in Firestore.');
+          }
+        },
+        error => console.error('Error fetching driver data:', error),
+      );
+    return unsubscribe;
+  }, [driverId]);
+
+  // Track and update location
+  useEffect(() => {
+    if (!driverId) return;
+    const watchId = Geolocation.watchPosition(
+      position => {
+        const newLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        };
+        setCurrentLocation(newLocation);
+        if (isAvailable) {
+          updateDriverStatus(driverId, newLocation, true).catch(err =>
+            console.error('Error updating status:', err),
+          );
+        }
+      },
+      error => console.log('Geolocation error:', error),
+      { enableHighAccuracy: true, distanceFilter: 10 },
+    );
+    return () => Geolocation.clearWatch(watchId);
+  }, [isAvailable, driverId]);
+
+  // Listen to nearby ride requests
+  useEffect(() => {
+    let unsubscribe = () => {};
+    if (isAvailable && currentLocation) {
+      unsubscribe = subscribeToNearbyRequests(currentLocation, 5, requests => {
+        setCurrentRide(requests.length > 0 ? requests[0] : null);
+      });
+    } else {
+      setCurrentRide(null);
+    }
+    return unsubscribe;
+  }, [isAvailable, currentLocation]);
+
+  // Toggle availability
+  const toggleAvailability = async () => {
+    if (!driverId) {
+      Alert.alert('Error', 'Driver ID not found.');
+      return;
+    }
+    const newStatus = !isAvailable;
+    setIsAvailable(newStatus);
+    try {
+      await updateDriverStatus(driverId, currentLocation, newStatus);
+      console.log('Availability updated:', newStatus);
+    } catch (error) {
+      console.error('Error updating availability:', error);
+      Alert.alert('Error', 'Could not update availability.');
+      setIsAvailable(!newStatus); // revert
+    }
   };
 
   const toggleDrawer = () => {
@@ -42,6 +138,45 @@ export default function DriverHomeScreen({ navigation }) {
     setDrawerOpen(!drawerOpen);
   };
 
+  const handleAcceptRide = async () => {
+    if (!currentRide) return;
+    try {
+      await acceptRideRequest(currentRide.id, driverId);
+      // Immediately hide the request card
+      setCurrentRide(prev => (prev ? { ...prev, status: 'accepted' } : prev));
+      // Fetch rider's username for a friendlier alert
+      const riderUserDoc = await firestore()
+        .collection('users')
+        .doc(currentRide.riderId)
+        .get();
+      const riderName =
+        riderUserDoc.data()?.username ||
+        riderUserDoc.data()?.fullName ||
+        'the rider';
+      Alert.alert(
+        'Ride Accepted',
+        `You accepted the ride request from ${riderName}.`,
+      );
+      // No-op: card already hidden
+    } catch (error) {
+      console.error('Error accepting ride:', error);
+      Alert.alert('Error', 'Failed to accept ride.');
+    }
+  };
+
+  const handleDeclineRide = async () => {
+    if (!currentRide) return;
+    try {
+      await declineRideRequest(currentRide.id);
+      Alert.alert('Ride Declined', 'You have declined the ride request.');
+      setCurrentRide(null);
+    } catch (error) {
+      console.error('Error declining ride:', error);
+      Alert.alert('Error', 'Failed to decline ride.');
+    }
+  };
+
+  // Drawer view
   const renderNavigationView = () => (
     <View style={styles.drawer}>
       <LinearGradient
@@ -50,16 +185,14 @@ export default function DriverHomeScreen({ navigation }) {
       >
         <View style={styles.drawerHeader}>
           <Image
-            source={{ uri: 'https://randomuser.me/api/portraits/women/44.jpg' }}
+            source={{ uri: driverData.profileImageUrl }}
             style={styles.drawerProfileImage}
           />
-          <Text style={styles.drawerProfileName}>Parsa Aghaei</Text>
-          <Text style={styles.drawerProfileStatus}>Available for work</Text>
-          <TouchableOpacity style={styles.getInTouchButton}>
-            <Text style={styles.getInTouchButtonText}>Get in touch</Text>
-          </TouchableOpacity>
+          <Text style={styles.drawerProfileName}>{driverData.name}</Text>
+          <Text style={styles.drawerProfileStatus}>
+            {isAvailable ? 'Available for work' : 'Offline'}
+          </Text>
         </View>
-
         <View style={styles.drawerSection}>
           <TouchableOpacity
             style={styles.drawerItem}
@@ -71,7 +204,6 @@ export default function DriverHomeScreen({ navigation }) {
             <Icon name="wallet" size={20} color="#fff" />
             <Text style={styles.drawerItemText}>Earnings History</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.drawerItem}
             onPress={() => {
@@ -82,7 +214,6 @@ export default function DriverHomeScreen({ navigation }) {
             <Icon name="money-check" size={20} color="#fff" />
             <Text style={styles.drawerItemText}>Withdraw Earnings</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.drawerItem}
             onPress={() => {
@@ -93,12 +224,13 @@ export default function DriverHomeScreen({ navigation }) {
             <Icon name="user-cog" size={20} color="#fff" />
             <Text style={styles.drawerItemText}>Profile Settings</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.drawerItem}
             onPress={() => {
               drawerRef.current.closeDrawer();
-              // Handle logout
+              auth()
+                .signOut()
+                .then(() => navigation.replace('Login'));
             }}
           >
             <Icon name="sign-out-alt" size={20} color="#ff3b30" />
@@ -121,156 +253,110 @@ export default function DriverHomeScreen({ navigation }) {
         drawerBackgroundColor="transparent"
       >
         <View style={styles.container}>
-          {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={toggleDrawer} style={styles.menuButton}>
+            <TouchableOpacity style={styles.menuButton} onPress={toggleDrawer}>
               <Icon name="bars" size={24} color="#fff" />
             </TouchableOpacity>
             <View style={styles.profileHeader}>
               <Image
-                source={{
-                  uri: 'https://randomuser.me/api/portraits/women/44.jpg',
-                }}
+                source={{ uri: driverData.profileImageUrl }}
                 style={styles.profileImage}
               />
               <View style={styles.profileTextContainer}>
-                <Text style={styles.profileName}>Parsa Aghaei</Text>
-                <Text style={styles.profileStatus}>Available for work</Text>
+                <Text style={styles.profileName}>{driverData.name}</Text>
+                <Text style={styles.profileStatus}>
+                  {isAvailable ? 'Available' : 'Offline'}
+                </Text>
               </View>
             </View>
-            <View style={styles.headerIcons}>
-              <TouchableOpacity style={styles.iconButton}>
-                <Icon name="heart" size={20} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
-                <Icon name="comment" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
           </View>
-
-          {/* Map View */}
           <View style={styles.mapContainer}>
             <MapView
+              ref={mapRef}
               style={styles.map}
               initialRegion={currentLocation}
               showsUserLocation={true}
+              followsUserLocation={true}
             >
-              {/* Current location marker */}
-              <Marker coordinate={currentLocation} title="Your Location">
-                <Image
-                  source={{
-                    uri: 'https://randomuser.me/api/portraits/women/44.jpg',
-                  }}
-                  style={styles.driverMarker}
-                />
-              </Marker>
-
-              {/* Nearby ride requests */}
-              {Array(10)
-                .fill(0)
-                .map((_, i) => (
-                  <Marker
-                    key={i}
-                    coordinate={{
-                      latitude:
-                        currentLocation.latitude +
-                        (Math.random() * 0.02 - 0.01),
-                      longitude:
-                        currentLocation.longitude +
-                        (Math.random() * 0.02 - 0.01),
-                    }}
-                    pinColor="cyan"
-                  />
-                ))}
+              <Marker coordinate={currentLocation} />
             </MapView>
-
-            {/* Availability Toggle */}
-            <View style={styles.availabilityToggle}>
-              <Text style={styles.availabilityText}>Availability</Text>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  isAvailable && styles.toggleButtonActive,
-                ]}
-                onPress={toggleAvailability}
-              >
-                <View
-                  style={[
-                    styles.toggleCircle,
-                    isAvailable && styles.toggleCircleActive,
-                  ]}
-                />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.availabilityButton,
+                { backgroundColor: isAvailable ? '#FF3B30' : '#00FF6A' },
+              ]}
+              onPress={toggleAvailability}
+            >
+              <Text style={styles.availabilityButtonText}>
+                {isAvailable ? 'Go Offline' : 'Go Online'}
+              </Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Bottom Panel */}
           <View style={styles.bottomPanel}>
-            {/* Earnings Card */}
             <View style={styles.earningsCard}>
               <View style={styles.earningsHeader}>
                 <View style={styles.earningsInfo}>
                   <Text style={styles.earningsLabel}>Total Earnings</Text>
-                  <Text style={styles.earningsAmount}>${earnings}</Text>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('EarningsDetails')}
-                  >
-                    <Text style={styles.detailsLink}>Details</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.earningsAmount}>
+                    ${driverData.totalEarnings}
+                  </Text>
+                  <Text style={styles.detailsLink}>View details</Text>
                 </View>
-
                 <View style={styles.vehicleInfo}>
-                  <Text style={styles.vehicleLabel}>Doll Cook</Text>
-                  <Text style={styles.vehicleName}>Toyota Camry</Text>
-                  <TouchableOpacity>
-                    <Text style={styles.changeLink}>Change</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.vehicleLabel}>Your Vehicle</Text>
+                  <Text style={styles.vehicleName}>
+                    {driverData.vehicleName}
+                  </Text>
+                  <Text style={styles.changeLink}>Change</Text>
                 </View>
-              </View>
-
-              <View style={styles.availabilitySection}>
-                <Text style={styles.availabilityLabel}>Availability</Text>
-                <Switch
-                  value={isAvailable}
-                  onValueChange={toggleAvailability}
-                  trackColor={{ false: '#767577', true: '#00FF6A' }}
-                  thumbColor={isAvailable ? '#fff' : '#f4f3f4'}
-                />
               </View>
             </View>
-
-            {/* Current Ride or Ride Request */}
             {currentRide ? (
               <View style={styles.rideCard}>
-                <Text style={styles.rideCardTitle}>Destination</Text>
-                <Text style={styles.rideDestination}>21 Andrew Ave.</Text>
-
+                <Text style={styles.rideCardTitle}>New Ride Request</Text>
+                <Text style={styles.rideDestination}>
+                  {typeof currentRide.destination === 'string'
+                    ? currentRide.destination
+                    : currentRide.destination?.address ||
+                      `${currentRide.destination?.latitude?.toFixed(
+                        5,
+                      )}, ${currentRide.destination?.longitude?.toFixed(5)}`}
+                </Text>
                 <View style={styles.rideInfoContainer}>
                   <View style={styles.rideInfo}>
-                    <Text style={styles.rideInfoLabel}>Trip length</Text>
-                    <Text style={styles.rideInfoValue}>23Km</Text>
+                    <Text style={styles.rideInfoLabel}>Distance</Text>
+                    <Text style={styles.rideInfoValue}>
+                      {currentRide.distance} km
+                    </Text>
                   </View>
                   <View style={styles.rideInfo}>
-                    <Text style={styles.rideInfoLabel}>Your earning</Text>
-                    <Text style={styles.rideInfoValue}>$45</Text>
+                    <Text style={styles.rideInfoLabel}>Fare</Text>
+                    <Text style={styles.rideInfoValue}>
+                      ₦{currentRide.fare}
+                    </Text>
                   </View>
                 </View>
-
                 <View style={styles.rideActions}>
-                  <TouchableOpacity style={styles.rejectButton}>
-                    <Icon name="times" size={20} color="#fff" />
+                  <TouchableOpacity
+                    style={styles.rejectButton}
+                    onPress={handleDeclineRide}
+                  >
+                    <Icon name="times" size={24} color="#fff" />
                   </TouchableOpacity>
-                  <View style={styles.acceptButtonContainer}>
-                    <Text style={styles.swipeText}>Swipe to accept ride</Text>
+                  <TouchableOpacity
+                    style={styles.acceptButtonContainer}
+                    onPress={handleAcceptRide}
+                  >
+                    <Text style={styles.swipeText}>Swipe to accept</Text>
                     <Icon name="chevron-right" size={20} color="#fff" />
-                  </View>
+                  </TouchableOpacity>
                 </View>
               </View>
             ) : (
               <View style={styles.noRideContainer}>
-                <Text style={styles.noRideText}>No current rides</Text>
+                <Text style={styles.noRideText}>No ride requests</Text>
                 <Text style={styles.noRideSubtext}>
-                  Waiting for ride requests...
+                  Turn on availability to receive requests
                 </Text>
               </View>
             )}
@@ -296,7 +382,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 15,
-    paddingTop: 10, // Reduced top padding since we're using SafeAreaView
+    paddingTop: 10,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
   menuButton: {
@@ -324,13 +410,6 @@ const styles = StyleSheet.create({
     color: '#ccc',
     fontSize: 12,
   },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  iconButton: {
-    padding: 5,
-  },
   mapContainer: {
     flex: 1,
     position: 'relative',
@@ -346,45 +425,26 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
-  availabilityToggle: {
+  availabilityButton: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 120,
     right: 20,
-    backgroundColor: '#fff',
-    padding: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 25,
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 3,
     elevation: 3,
+    zIndex: 10,
   },
-  availabilityText: {
-    marginRight: 10,
-    fontSize: 12,
-    color: '#333',
-  },
-  toggleButton: {
-    width: 50,
-    height: 25,
-    borderRadius: 15,
-    backgroundColor: '#ccc',
-    justifyContent: 'center',
-    padding: 2,
-  },
-  toggleButtonActive: {
-    backgroundColor: '#00FF6A',
-  },
-  toggleCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-  },
-  toggleCircleActive: {
-    transform: [{ translateX: 25 }],
+  availabilityButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   bottomPanel: {
     position: 'absolute',
@@ -425,7 +485,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   earningsAmount: {
-    fontSize: 36,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 10,
@@ -452,19 +512,6 @@ const styles = StyleSheet.create({
   changeLink: {
     color: '#0066FF',
     fontSize: 14,
-  },
-  availabilitySection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 20,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  availabilityLabel: {
-    fontSize: 16,
-    color: '#333',
   },
   rideCard: {
     backgroundColor: '#00FF6A',
