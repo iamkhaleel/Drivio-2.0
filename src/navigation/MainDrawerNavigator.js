@@ -1,11 +1,11 @@
 // navigation/MainDrawerNavigator.js
 import React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import MainTabNavigator from '../navigation/MainTabNavigator';
+import MainTabNavigator from './MainTabNavigator';
 import WithdrawalScreen from '../screens/Home/Withdrawal';
 import EarningHistoryScreen from '../screens/Home/EarningHistoryScreen';
 import ProfileSettingsScreen from '../screens/Home/ProfileSettingsScreen';
-import Withdrawal from '../screens/Home/Withdrawal';
+import DriverHomeScreen from '../screens/Home/DriverHomeScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -19,8 +19,9 @@ export default function MainDrawerNavigator() {
       }}
     >
       <Drawer.Screen name="HomeTabs" component={MainTabNavigator} />
+      <Drawer.Screen name="DriverHome" component={DriverHomeScreen} />
       <Drawer.Screen name="EarningsHistory" component={EarningHistoryScreen} />
-      <Drawer.Screen name="WithdrawalScreen" component={Withdrawal} />
+      <Drawer.Screen name="WithdrawalScreen" component={WithdrawalScreen} />
       <Drawer.Screen
         name="ProfileSettingsScreen"
         component={ProfileSettingsScreen}
@@ -28,5 +29,3 @@ export default function MainDrawerNavigator() {
     </Drawer.Navigator>
   );
 }
-
-

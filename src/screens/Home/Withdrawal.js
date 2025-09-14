@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,46 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 export default function Withdrawal() {
   const [amount, setAmount] = useState('');
-  const currentBalance = 120; // Example balance
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [loading, setLoading] = useState(true);
   const minWithdrawal = 50;
+  const driverId = auth().currentUser?.uid;
+
+  // Fetch driver's current balance
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!driverId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const driverDoc = await firestore()
+          .collection('drivers')
+          .doc(driverId)
+          .get();
+
+        if (driverDoc.exists) {
+          const data = driverDoc.data();
+          setCurrentBalance(data.totalEarnings || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching balance:', error);
+        Alert.alert('Error', 'Failed to load balance');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBalance();
+  }, [driverId]);
 
   const handleWithdraw = () => {
     if (!amount) {
@@ -31,6 +65,17 @@ export default function Withdrawal() {
     Alert.alert('Success', `You withdrew $${withdrawalAmount}!`);
     setAmount('');
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#00FF6A" />
+          <Text style={styles.loadingText}>Loading balance...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -82,7 +127,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0F0E0E',
-    padding: 20,
+    padding: 30,
+    paddingTop: 70,
   },
   balanceCard: {
     backgroundColor: '#1C1C1C',
@@ -139,5 +185,15 @@ const styles = StyleSheet.create({
     color: '#0F0E0E',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#B0B0B0',
+    fontSize: 16,
+    marginTop: 10,
   },
 });

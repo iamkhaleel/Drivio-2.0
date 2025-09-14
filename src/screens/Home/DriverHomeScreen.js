@@ -226,7 +226,7 @@ export default function DriverHomeScreen({ navigation }) {
             style={styles.drawerItem}
             onPress={() => {
               drawerRef.current.closeDrawer();
-              navigation.navigate('WithdrawalScreen');
+              navigation.navigate('Withdrawal');
             }}
           >
             <Icon name="money-check" size={20} color="#fff" />
@@ -282,6 +282,21 @@ export default function DriverHomeScreen({ navigation }) {
                 {isAvailable ? 'Available' : 'Offline'}
               </Text>
             </View>
+            <TouchableOpacity
+              style={{
+                backgroundColor: isAvailable ? '#FF3B30' : '#00FF6A',
+                alignSelf: 'flex-end',
+                marginBottom: 5,
+                marginStart: 20,
+                borderRadius: 15,
+                padding: 10,
+              }}
+              onPress={toggleAvailability}
+            >
+              <Text style={styles.availabilityButtonText}>
+                {isAvailable ? 'Go Offline' : 'Go Online'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.mapContainer}>
@@ -294,7 +309,7 @@ export default function DriverHomeScreen({ navigation }) {
             >
               <Marker coordinate={currentLocation} />
             </MapView>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[
                 styles.availabilityButton,
                 { backgroundColor: isAvailable ? '#FF3B30' : '#00FF6A' },
@@ -304,7 +319,7 @@ export default function DriverHomeScreen({ navigation }) {
               <Text style={styles.availabilityButtonText}>
                 {isAvailable ? 'Go Offline' : 'Go Online'}
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
           <View style={styles.bottomPanel}>
             <View style={styles.earningsCard}>

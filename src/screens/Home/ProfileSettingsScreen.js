@@ -13,12 +13,12 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import firestore from '@react-native-firebase/firestore';
-import storage from '@react-native-firebase/storage';
-import * as ImagePicker from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage'; // Add Firebase Storage
+import auth from '@react-native-firebase/auth';
+import { launchImageLibrary } from 'react-native-image-picker';
 
 export default function ProfileSettingsScreen({ navigation }) {
-  // 🔥 TEMPORARY UID for testing
-  const uid = 'test-user-123';
+  const uid = auth().currentUser?.uid;
 
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -31,12 +31,20 @@ export default function ProfileSettingsScreen({ navigation }) {
   const [licensePlate, setLicensePlate] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [driverLicense, setDriverLicense] = useState('');
-  const [driverImage, setDriverImage] = useState(null);
-  const [carImage, setCarImage] = useState(null);
+  const [driverImage, setDriverImage] = useState(null); // Store local URI for preview
+  const [carImage, setCarImage] = useState(null); // Store local URI for preview
+  const [driverImageUrl, setDriverImageUrl] = useState(null); // Store Firebase Storage URL
+  const [carImageUrl, setCarImageUrl] = useState(null); // Store Firebase Storage URL
 
   // Fetch profile data
   useEffect(() => {
     const fetchData = async () => {
+      if (!uid) {
+        Alert.alert('Error', 'User not authenticated');
+        setLoading(false);
+        return;
+      }
+
       try {
         const driverDoc = await firestore()
           .collection('drivers')
@@ -52,8 +60,8 @@ export default function ProfileSettingsScreen({ navigation }) {
           setLicensePlate(data.licensePlate || '');
           setBankAccount(data.bankAccount || '');
           setDriverLicense(data.driverLicense || '');
-          setDriverImage(data.driverImage || null);
-          setCarImage(data.carImage || null);
+          setDriverImage(data.driverImageUrl || null); // Load Firebase Storage URL
+          setCarImage(data.carImageUrl || null); // Load Firebase Storage URL
         }
 
         if (userDoc.exists) {
@@ -72,81 +80,99 @@ export default function ProfileSettingsScreen({ navigation }) {
     fetchData();
   }, [uid]);
 
-  const pickImage = type => {
-    const options = { mediaType: 'photo', quality: 0.8 };
-    ImagePicker.launchImageLibrary(options, response => {
-      if (response.didCancel) return;
-      if (response.errorCode) {
-        Alert.alert('Error', 'Failed to pick image');
-      } else if (response.assets?.length) {
-        if (type === 'driver') {
-          setDriverImage(response.assets[0].uri);
-        } else {
-          setCarImage(response.assets[0].uri);
-        }
+  // Pick Image
+  const pickImage = async type => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.7 }, response => {
+      if (response.didCancel || !response.assets) {
+        console.log('Image picker cancelled or no assets');
+        return;
+      }
+
+      const asset = response.assets[0];
+      const uri = asset.uri;
+
+      if (type === 'driver') {
+        setDriverImage(uri); // Set local URI for preview
+      } else {
+        setCarImage(uri); // Set local URI for preview
       }
     });
   };
 
+  // Upload Image to Firebase Storage
   const uploadImage = async (uri, path) => {
     if (!uri) return null;
-    setUploading(true);
-    try {
-      const blob = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = () => resolve(xhr.response);
-        xhr.onerror = () => reject(new TypeError('Network request failed'));
-        xhr.responseType = 'blob';
-        xhr.open('GET', uri, true);
-        xhr.send(null);
-      });
 
-      const ref = storage().ref().child(path);
-      await ref.put(blob);
-      blob.close();
-      return await ref.getDownloadURL();
-    } catch (error) {
-      console.error('Upload error:', error);
-      Alert.alert('Error', 'Failed to upload image');
-      return null;
-    } finally {
-      setUploading(false);
+    try {
+      const reference = storage().ref(path);
+      await reference.putFile(uri); // Upload image to Firebase Storage
+      const downloadUrl = await reference.getDownloadURL(); // Get download URL
+      return downloadUrl;
+    } catch (err) {
+      console.error(`Error uploading image to ${path}:`, err);
+      throw err;
     }
   };
 
+  // Save changes
   const handleSave = async () => {
+    if (!uid) {
+      Alert.alert('Error', 'User not authenticated');
+      return;
+    }
+
     try {
       setUploading(true);
-      const driverImageURL = driverImage?.startsWith('http')
-        ? driverImage
-        : await uploadImage(driverImage, `drivers/${uid}/profile.jpg`);
-      const carImageURL = carImage?.startsWith('http')
-        ? carImage
-        : await uploadImage(carImage, `drivers/${uid}/car.jpg`);
 
+      // Upload images to Firebase Storage
+      let driverImageUrlNew = driverImageUrl;
+      let carImageUrlNew = carImageUrl;
+
+      if (driverImage && !driverImage.startsWith('https://')) {
+        // Only upload if the image is a local URI (not already a Firebase URL)
+        driverImageUrlNew = await uploadImage(
+          driverImage,
+          `drivers/${uid}/driverImage.jpg`,
+        );
+        setDriverImageUrl(driverImageUrlNew); // Update state with new URL
+      }
+
+      if (carImage && !carImage.startsWith('https://')) {
+        // Only upload if the image is a local URI
+        carImageUrlNew = await uploadImage(
+          carImage,
+          `drivers/${uid}/carImage.jpg`,
+        );
+        setCarImageUrl(carImageUrlNew); // Update state with new URL
+      }
+
+      // Save profile data to Firestore
       await firestore()
         .collection('users')
         .doc(uid)
         .set({ username, email }, { merge: true });
 
-      await firestore().collection('drivers').doc(uid).set(
-        {
-          fullName,
-          carModel,
-          carColor,
-          licensePlate,
-          bankAccount,
-          driverLicense,
-          driverImage: driverImageURL,
-          carImage: carImageURL,
-        },
-        { merge: true },
-      );
+      await firestore()
+        .collection('drivers')
+        .doc(uid)
+        .set(
+          {
+            fullName,
+            carModel,
+            carColor,
+            licensePlate,
+            bankAccount,
+            driverLicense,
+            driverImageUrl: driverImageUrlNew || null, // Store Firebase URL
+            carImageUrl: carImageUrlNew || null, // Store Firebase URL
+          },
+          { merge: true },
+        );
 
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
       console.error('Save error:', error);
-      Alert.alert('Error', 'Failed to save profile');
+      Alert.alert('Error', `Failed to save profile: ${error.message}`);
     } finally {
       setUploading(false);
     }
