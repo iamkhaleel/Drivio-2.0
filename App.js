@@ -15,6 +15,7 @@ import HomeScreen from './src/screens/Home/HomeScreen';
 import DriverHomeScreen from './src/screens/Home/DriverHomeScreen';
 import ForgotPasswordScreen from './src/screens/Auth/ForgotPasswordScreen';
 import MainTabNavigator from './src/navigation/MainTabNavigator';
+import EarningHistoryScreen from './src/screens/Home/EarningHistoryScreen';
 
 const Stack = createStackNavigator();
 
@@ -79,6 +80,7 @@ export default function App() {
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="Main" component={MainTabNavigator} />
         <Stack.Screen name="DriverHome" component={DriverHomeScreen} />
+        <Stack.Screen name="EarningHistory" component={EarningHistoryScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -42,6 +42,7 @@ export default function DriverHomeScreen({ navigation }) {
     longitudeDelta: 0.0421,
   });
   const [currentRide, setCurrentRide] = useState(null);
+  const [pendingRequests, setPendingRequests] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef(null);
   const mapRef = useRef(null);
@@ -103,9 +104,11 @@ export default function DriverHomeScreen({ navigation }) {
     let unsubscribe = () => {};
     if (isAvailable && currentLocation) {
       unsubscribe = subscribeToNearbyRequests(currentLocation, 5, requests => {
+        setPendingRequests(requests);
         setCurrentRide(requests.length > 0 ? requests[0] : null);
       });
     } else {
+      setPendingRequests([]);
       setCurrentRide(null);
     }
     return unsubscribe;
@@ -138,16 +141,26 @@ export default function DriverHomeScreen({ navigation }) {
     setDrawerOpen(!drawerOpen);
   };
 
-  const handleAcceptRide = async () => {
-    if (!currentRide) return;
+  const handleAcceptRide = async (rideId = null) => {
+    const targetRideId = rideId || currentRide?.id;
+    if (!targetRideId) return;
+
+    const targetRequest = pendingRequests.find(req => req.id === targetRideId);
+    if (!targetRequest) return;
+
     try {
-      await acceptRideRequest(currentRide.id, driverId);
-      // Immediately hide the request card
-      setCurrentRide(prev => (prev ? { ...prev, status: 'accepted' } : prev));
+      await acceptRideRequest(targetRideId, driverId);
+      // Remove from pending requests
+      setPendingRequests(prev => prev.filter(req => req.id !== targetRideId));
+      // Clear current ride if it was the accepted one
+      if (currentRide?.id === targetRideId) {
+        setCurrentRide(null);
+      }
+
       // Fetch rider's username for a friendlier alert
       const riderUserDoc = await firestore()
         .collection('users')
-        .doc(currentRide.riderId)
+        .doc(targetRequest.riderId)
         .get();
       const riderName =
         riderUserDoc.data()?.username ||
@@ -157,19 +170,24 @@ export default function DriverHomeScreen({ navigation }) {
         'Ride Accepted',
         `You accepted the ride request from ${riderName}.`,
       );
-      // No-op: card already hidden
     } catch (error) {
       console.error('Error accepting ride:', error);
       Alert.alert('Error', 'Failed to accept ride.');
     }
   };
 
-  const handleDeclineRide = async () => {
-    if (!currentRide) return;
+  const handleDeclineRide = async (rideId = null) => {
+    const targetRideId = rideId || currentRide?.id;
+    if (!targetRideId) return;
     try {
-      await declineRideRequest(currentRide.id);
+      await declineRideRequest(targetRideId);
       Alert.alert('Ride Declined', 'You have declined the ride request.');
-      setCurrentRide(null);
+      // Remove from pending requests
+      setPendingRequests(prev => prev.filter(req => req.id !== targetRideId));
+      // If this was the current ride, clear it
+      if (currentRide?.id === targetRideId) {
+        setCurrentRide(null);
+      }
     } catch (error) {
       console.error('Error declining ride:', error);
       Alert.alert('Error', 'Failed to decline ride.');
@@ -198,7 +216,7 @@ export default function DriverHomeScreen({ navigation }) {
             style={styles.drawerItem}
             onPress={() => {
               drawerRef.current.closeDrawer();
-              navigation.navigate('EarningsHistory');
+              navigation.navigate('EarningHistory');
             }}
           >
             <Icon name="wallet" size={20} color="#fff" />
@@ -208,7 +226,7 @@ export default function DriverHomeScreen({ navigation }) {
             style={styles.drawerItem}
             onPress={() => {
               drawerRef.current.closeDrawer();
-              navigation.navigate('Withdrawal');
+              navigation.navigate('WithdrawalScreen');
             }}
           >
             <Icon name="money-check" size={20} color="#fff" />
@@ -218,7 +236,7 @@ export default function DriverHomeScreen({ navigation }) {
             style={styles.drawerItem}
             onPress={() => {
               drawerRef.current.closeDrawer();
-              navigation.navigate('ProfileSettings');
+              navigation.navigate('ProfileSettingsScreen');
             }}
           >
             <Icon name="user-cog" size={20} color="#fff" />
@@ -257,19 +275,15 @@ export default function DriverHomeScreen({ navigation }) {
             <TouchableOpacity style={styles.menuButton} onPress={toggleDrawer}>
               <Icon name="bars" size={24} color="#fff" />
             </TouchableOpacity>
-            <View style={styles.profileHeader}>
-              <Image
-                source={{ uri: driverData.profileImageUrl }}
-                style={styles.profileImage}
-              />
-              <View style={styles.profileTextContainer}>
-                <Text style={styles.profileName}>{driverData.name}</Text>
-                <Text style={styles.profileStatus}>
-                  {isAvailable ? 'Available' : 'Offline'}
-                </Text>
-              </View>
+
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerName}>{driverData.name}</Text>
+              <Text style={styles.headerStatus}>
+                {isAvailable ? 'Available' : 'Offline'}
+              </Text>
             </View>
           </View>
+
           <View style={styles.mapContainer}>
             <MapView
               ref={mapRef}
@@ -311,46 +325,60 @@ export default function DriverHomeScreen({ navigation }) {
                 </View>
               </View>
             </View>
-            {currentRide ? (
-              <View style={styles.rideCard}>
-                <Text style={styles.rideCardTitle}>New Ride Request</Text>
-                <Text style={styles.rideDestination}>
-                  {typeof currentRide.destination === 'string'
-                    ? currentRide.destination
-                    : currentRide.destination?.address ||
-                      `${currentRide.destination?.latitude?.toFixed(
-                        5,
-                      )}, ${currentRide.destination?.longitude?.toFixed(5)}`}
+            {pendingRequests.length > 0 ? (
+              <View style={styles.requestsContainer}>
+                <Text style={styles.requestsTitle}>
+                  🚖 Ride Requests ({pendingRequests.length})
                 </Text>
-                <View style={styles.rideInfoContainer}>
-                  <View style={styles.rideInfo}>
-                    <Text style={styles.rideInfoLabel}>Distance</Text>
-                    <Text style={styles.rideInfoValue}>
-                      {currentRide.distance} km
+                {pendingRequests.map((request, index) => (
+                  <View key={request.id} style={styles.rideCard}>
+                    <Text style={styles.rideCardTitle}>
+                      Request #{index + 1}
                     </Text>
-                  </View>
-                  <View style={styles.rideInfo}>
-                    <Text style={styles.rideInfoLabel}>Fare</Text>
-                    <Text style={styles.rideInfoValue}>
-                      ₦{currentRide.fare}
+
+                    <Text style={styles.rideDestination}>
+                      {typeof request.destination === 'string'
+                        ? request.destination
+                        : request.destination?.address ||
+                          `${request.destination?.latitude?.toFixed(
+                            5,
+                          )}, ${request.destination?.longitude?.toFixed(5)}`}
                     </Text>
+
+                    <View style={styles.rideInfoContainer}>
+                      <View style={styles.rideInfo}>
+                        <Text style={styles.rideInfoLabel}>Distance</Text>
+                        <Text style={styles.rideInfoValue}>
+                          {request.distance?.toFixed(2)} km
+                        </Text>
+                      </View>
+                      <View style={styles.rideInfo}>
+                        <Text style={styles.rideInfoLabel}>Fare</Text>
+                        <Text style={styles.rideInfoValue}>
+                          ${request.fare?.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.rideActionsModern}>
+                      <TouchableOpacity
+                        style={styles.declineButton}
+                        onPress={() => handleDeclineRide(request.id)}
+                      >
+                        <Icon name="times-circle" size={20} color="#fff" />
+                        <Text style={styles.actionButtonText}>Decline</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.acceptButton}
+                        onPress={() => handleAcceptRide(request.id)}
+                      >
+                        <Icon name="check-circle" size={20} color="#fff" />
+                        <Text style={styles.actionButtonText}>Accept</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.rideActions}>
-                  <TouchableOpacity
-                    style={styles.rejectButton}
-                    onPress={handleDeclineRide}
-                  >
-                    <Icon name="times" size={24} color="#fff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.acceptButtonContainer}
-                    onPress={handleAcceptRide}
-                  >
-                    <Text style={styles.swipeText}>Swipe to accept</Text>
-                    <Icon name="chevron-right" size={20} color="#fff" />
-                  </TouchableOpacity>
-                </View>
+                ))}
               </View>
             ) : (
               <View style={styles.noRideContainer}>
@@ -377,17 +405,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     marginTop: 20,
   },
+
+  // ===== Header =====
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 15,
     paddingTop: 10,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    position: 'relative',
   },
   menuButton: {
+    position: 'absolute',
+    left: 15,
     padding: 5,
   },
+  headerCenter: {
+    alignItems: 'center',
+  },
+  headerName: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 20,
+  },
+  headerStatus: {
+    color: '#ccc',
+    fontSize: 14,
+  },
+
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -410,6 +456,8 @@ const styles = StyleSheet.create({
     color: '#ccc',
     fontSize: 12,
   },
+
+  // ===== Map =====
   mapContainer: {
     flex: 1,
     position: 'relative',
@@ -425,9 +473,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
+
+  // ===== Availability Button =====
   availabilityButton: {
     position: 'absolute',
-    bottom: 120,
+    top: 120,
     right: 20,
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -446,6 +496,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
+
+  // ===== Bottom Panel =====
   bottomPanel: {
     position: 'absolute',
     bottom: 0,
@@ -461,6 +513,8 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
+
+  // ===== Earnings Card =====
   earningsCard: {
     backgroundColor: '#f8f8f8',
     borderRadius: 15,
@@ -513,21 +567,52 @@ const styles = StyleSheet.create({
     color: '#0066FF',
     fontSize: 14,
   },
+
+  // ===== Modern Ride Card =====
   rideCard: {
-    backgroundColor: '#00FF6A',
-    borderRadius: 15,
+    backgroundColor: '#fff',
+    borderRadius: 20,
     padding: 20,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
   },
   rideCardTitle: {
-    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
     marginBottom: 10,
   },
+
+  // Rider Profile inside ride card
+  rideProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  rideProfileImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  rideProfileName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  rideProfileRating: {
+    fontSize: 13,
+    color: '#666',
+  },
+
   rideDestination: {
-    color: '#fff',
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#111',
     marginBottom: 20,
   },
   rideInfoContainer: {
@@ -539,42 +624,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rideInfoLabel: {
-    color: '#fff',
-    fontSize: 12,
+    color: '#666',
+    fontSize: 13,
     marginBottom: 5,
   },
   rideInfoValue: {
-    color: '#fff',
-    fontSize: 18,
+    color: '#111',
+    fontSize: 16,
     fontWeight: 'bold',
   },
-  rideActions: {
+
+  rideActionsModern: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  rejectButton: {
-    backgroundColor: '#FF3B30',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  acceptButtonContainer: {
+  declineButton: {
     flex: 1,
-    backgroundColor: '#0066FF',
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
     flexDirection: 'row',
-  },
-  swipeText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF3B30',
+    paddingVertical: 14,
     marginRight: 10,
+    borderRadius: 10,
   },
+  acceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#34C759',
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+
+  // ===== No Ride =====
   noRideContainer: {
     backgroundColor: '#f0f0f0',
     borderRadius: 15,
@@ -590,6 +680,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
   },
+
+  // ===== Drawer =====
   drawer: {
     flex: 1,
   },
@@ -643,5 +735,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     marginLeft: 15,
+  },
+  requestsContainer: {
+    marginBottom: 20,
+  },
+  requestsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
   },
 });

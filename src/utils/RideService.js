@@ -175,10 +175,30 @@ export const subscribeToNearbyRequests = (
           id: doc.id,
           ...doc.data(),
           distance: calculateDistance(driverLocation, doc.data().pickup),
+          // Add fare calculation for display
+          fare:
+            doc.data().estimatedFare ||
+            calculateFare(calculateDistance(driverLocation, doc.data().pickup)),
         }))
         .filter(req => req.distance <= maxDistance);
       callback(requests);
     });
+};
+
+// Check if rider already has a pending request
+export const hasPendingRequest = async riderId => {
+  try {
+    const pendingRequest = await firestore()
+      .collection('rides')
+      .where('riderId', '==', riderId)
+      .where('status', '==', 'pending')
+      .get();
+
+    return !pendingRequest.empty;
+  } catch (error) {
+    console.error('Error checking pending request:', error);
+    return false;
+  }
 };
 
 // Driver accepts a request
