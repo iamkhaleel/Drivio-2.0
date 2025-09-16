@@ -9,32 +9,55 @@ export default function EarningHistoryScreen() {
 
   useEffect(() => {
     const user = auth().currentUser;
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    // Avoid potential index requirements by not ordering in Firestore; sort locally instead
     const unsub = firestore()
       .collection('payments')
       .where('driverId', '==', user.uid)
-      .orderBy('createdAt', 'desc')
-      .limit(100)
+      .limit(200)
       .onSnapshot(
         snap => {
-          const rows = snap.docs.map(doc => {
-            const d = doc.data();
-            const t = d.createdAt?.toDate?.() || new Date();
-            return {
-              id: doc.id,
-              date: `${t.toLocaleDateString()} ${t.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}`,
-              amount: `$${Number(d.amount || 0).toFixed(2)}`,
-              method: d.method || 'unknown',
-              status: d.status || 'succeeded',
-            };
-          });
+          const rows = snap.docs
+            .map(doc => {
+              const d = doc.data();
+              const createdAt = d.createdAt?.toDate?.() || null;
+              return {
+                id: doc.id,
+                createdAt,
+                amountNum: Number(d.amount || 0),
+                method: d.method || 'unknown',
+                status: d.status || 'succeeded',
+              };
+            })
+            .sort((a, b) => {
+              const ta = a.createdAt ? a.createdAt.getTime() : 0;
+              const tb = b.createdAt ? b.createdAt.getTime() : 0;
+              return tb - ta;
+            })
+            .map(row => {
+              const t = row.createdAt || new Date();
+              return {
+                id: row.id,
+                date: `${t.toLocaleDateString()} ${t.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}`,
+                amount: `$${row.amountNum.toFixed(2)}`,
+                method: row.method,
+                status: row.status,
+              };
+            });
           setPayments(rows);
           setLoading(false);
         },
-        () => setLoading(false),
+        err => {
+          console.warn('Earnings listener error:', err);
+          setLoading(false);
+        },
       );
     return unsub;
   }, []);

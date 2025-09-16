@@ -12,6 +12,8 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -48,6 +50,8 @@ export default function HomeScreen() {
   const [estimatedFare, setEstimatedFare] = useState(null);
   const [rideStatus, setRideStatus] = useState(null);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [locationPermissionDenied, setLocationPermissionDenied] =
+    useState(false);
 
   const [rideId, setRideId] = useState(null);
   const mapRef = useRef(null);
@@ -61,21 +65,73 @@ export default function HomeScreen() {
     return () => unsubscribe();
   }, []);
 
-  // Get user location
+  // Request location permission and get user location
   useEffect(() => {
-    Geolocation.getCurrentPosition(
-      position => {
-        const newLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
-        setLocation(newLocation);
-      },
-      error => console.log(error),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
-    );
+    const requestLocationPermission = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Location Permission',
+              message:
+                'This app needs access to your location to find nearby drivers.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            },
+          );
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            fetchLocation();
+          } else {
+            setLocationPermissionDenied(true);
+            Alert.alert(
+              'Permission Denied',
+              'Location permission is required to use this feature. Please enable it in your device settings.',
+              [{ text: 'OK', onPress: () => console.log('Permission denied') }],
+            );
+          }
+        } catch (err) {
+          console.warn('Permission request error:', err);
+          Alert.alert('Error', 'Failed to request location permission.');
+        }
+      } else {
+        // iOS: Geolocation handles permission request automatically
+        fetchLocation();
+      }
+    };
+
+    const fetchLocation = () => {
+      Geolocation.getCurrentPosition(
+        position => {
+          const newLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          };
+          setLocation(newLocation);
+          setLocationPermissionDenied(false);
+        },
+        error => {
+          console.log('Geolocation error:', error);
+          if (error.code === 1) {
+            // Permission denied
+            setLocationPermissionDenied(true);
+            Alert.alert(
+              'Permission Denied',
+              'Location permission is required to use this feature. Please enable it in your device settings.',
+              [{ text: 'OK', onPress: () => console.log('Permission denied') }],
+            );
+          } else {
+            Alert.alert('Error', 'Unable to fetch location. Please try again.');
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+      );
+    };
+
+    requestLocationPermission();
   }, []);
 
   const handlePress = selectedLocation => {
@@ -250,7 +306,6 @@ export default function HomeScreen() {
         <Text style={styles.eta}>
           ETA: {Math.round(item.distance / 0.3)} min
         </Text>
-        {/* Rough ETA estimate */}
       </View>
     </TouchableOpacity>
   );
@@ -284,7 +339,7 @@ export default function HomeScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: 20,
-              marginHorizontal: 20,
+              marginHorizontal: 5,
               position: 'relative',
               shadowColor: '#d4d4d4',
             },
@@ -304,7 +359,7 @@ export default function HomeScreen() {
               width: '100%',
               zIndex: 99,
               borderRadius: 10,
-              shadowColor: '##d4d4d4',
+              shadowColor: '#d4d4d4',
             },
           }}
           query={{
@@ -385,24 +440,25 @@ export default function HomeScreen() {
           </MapView>
         ) : (
           <View style={styles.fakeMap}>
-            <ActivityIndicator size="large" color="#FFFCFB" />
+            {locationPermissionDenied ? (
+              <Text style={styles.mapText}>
+                Location permission denied. Please enable it in settings.
+              </Text>
+            ) : (
+              <ActivityIndicator size="large" color="#FFFCFB" />
+            )}
           </View>
         )}
-
-        {/* <View style={styles.topButtons}>
-          <TouchableOpacity style={styles.circleButton}>
-            <Icon name="menu" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.earningsBadge}>
-            <Text style={styles.earningsText}>$36.45</Text>
-          </View> 
-        </View> */}
 
         {/* Bottom Buttons */}
         <View style={styles.bottomContainer}>
           <TouchableOpacity
-            style={styles.goButton}
+            style={[
+              styles.goButton,
+              locationPermissionDenied && { opacity: 0.5 },
+            ]}
             onPress={handleGoButtonPress}
+            disabled={locationPermissionDenied}
           >
             <Text style={styles.goText}>GO</Text>
           </TouchableOpacity>
@@ -584,32 +640,8 @@ const styles = StyleSheet.create({
   mapText: {
     color: '#FFFCFB',
     fontSize: 18,
-  },
-  topButtons: {
-    position: 'absolute',
-    top: 20,
-    left: 15,
-    right: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  circleButton: {
-    backgroundColor: '#1C1C1C',
-    borderRadius: 30,
-    padding: 10,
-  },
-  earningsBadge: {
-    backgroundColor: '#000',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    right: '37%',
-  },
-  earningsText: {
-    color: '#00FF6A',
-    fontSize: 16,
-    fontWeight: 'bold',
+    textAlign: 'center',
+    padding: 20,
   },
   bottomContainer: {
     position: 'absolute',

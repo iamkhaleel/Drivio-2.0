@@ -4,9 +4,9 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
+  SafeAreaView,
+  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -14,98 +14,73 @@ import firestore from '@react-native-firebase/firestore';
 export default function RecentRidesScreen() {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const user = auth().currentUser;
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      Alert.alert('Error', 'You must be logged in to view rides.');
+      return;
+    }
+
+    // Fetch all rides with a high limit and sort locally to avoid index requirements
     const unsub = firestore()
       .collection('rides')
       .where('riderId', '==', user.uid)
-      .orderBy('createdAt', 'desc')
-      .limit(50)
+      .limit(200)
       .onSnapshot(
         snap => {
-          const items = snap.docs.map(doc => {
-            const d = doc.data();
-            const created = d.createdAt?.toDate?.() || new Date();
-            return {
-              id: doc.id,
-              pickup:
-                typeof d.pickup === 'string'
-                  ? d.pickup
-                  : d.pickup?.address || 'Pickup',
-              destination:
-                typeof d.destination === 'string'
-                  ? d.destination
-                  : d.destination?.address || 'Destination',
-              date: created.toLocaleDateString(),
-              time: created.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-              fare:
-                typeof d.estimatedFare === 'number'
-                  ? `$${d.estimatedFare.toFixed(2)}`
-                  : '$0.00',
-              status: (d.status || 'pending').replace(/\b\w/g, c =>
-                c.toUpperCase(),
-              ),
-            };
-          });
-          setRides(items);
+          const rows = snap.docs
+            .map(doc => {
+              const d = doc.data();
+              const createdAt =
+                d.createdAt?.toDate?.() ||
+                d.updatedAt?.toDate?.() ||
+                new Date(0);
+              return {
+                id: doc.id,
+                createdAt,
+                pickup:
+                  typeof d.pickup === 'string'
+                    ? d.pickup
+                    : d.pickup?.address || 'Pickup',
+                destination:
+                  typeof d.destination === 'string'
+                    ? d.destination
+                    : d.destination?.address || 'Destination',
+                fareNum: Number(d.estimatedFare || 0),
+                status: d.status || 'pending',
+              };
+            })
+            .sort((a, b) => {
+              const ta = a.createdAt.getTime();
+              const tb = b.createdAt.getTime();
+              return tb - ta; // Sort by descending order (newest first)
+            })
+            .map(row => {
+              const t = row.createdAt;
+              return {
+                id: row.id,
+                date: `${t.toLocaleDateString()} ${t.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}`,
+                pickupDest: `${row.pickup} → ${row.destination}`,
+                fare: `$${row.fareNum.toFixed(2)}`,
+                status: row.status.replace(/\b\w/g, c => c.toUpperCase()),
+              };
+            });
+          setRides(rows);
           setLoading(false);
         },
-        () => setLoading(false),
+        err => {
+          console.warn('Rides listener error:', err);
+          setLoading(false);
+          Alert.alert('Error', 'Failed to load rides. Please try again.');
+        },
       );
     return unsub;
   }, []);
-
-  const refreshRides = async () => {
-    try {
-      const user = auth().currentUser;
-      if (!user) return;
-      setRefreshing(true);
-      const snap = await firestore()
-        .collection('rides')
-        .where('riderId', '==', user.uid)
-        .orderBy('createdAt', 'desc')
-        .limit(50)
-        .get();
-      const items = snap.docs.map(doc => {
-        const d = doc.data();
-        const created = d.createdAt?.toDate?.() || new Date();
-        return {
-          id: doc.id,
-          pickup:
-            typeof d.pickup === 'string'
-              ? d.pickup
-              : d.pickup?.address || 'Pickup',
-          destination:
-            typeof d.destination === 'string'
-              ? d.destination
-              : d.destination?.address || 'Destination',
-          date: created.toLocaleDateString(),
-          time: created.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          fare:
-            typeof d.estimatedFare === 'number'
-              ? `$${d.estimatedFare.toFixed(2)}`
-              : '$0.00',
-          status: (d.status || 'pending').replace(/\b\w/g, c =>
-            c.toUpperCase(),
-          ),
-        };
-      });
-      setRides(items);
-    } catch (e) {
-      // ignore
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   const getStatusColor = status => {
     switch (status) {
@@ -119,50 +94,37 @@ export default function RecentRidesScreen() {
   };
 
   const renderRide = ({ item }) => (
-    <SafeAreaView style={styles.rideCard}>
-      <View style={styles.rideHeader}>
-        <Text style={styles.route}>
-          {item.pickup} → {item.destination}
-        </Text>
+    <View style={styles.card}>
+      <View>
+        <Text style={styles.date}>{item.date}</Text>
+        <Text style={styles.label}>{item.pickupDest}</Text>
         <Text style={[styles.status, { color: getStatusColor(item.status) }]}>
           {item.status}
         </Text>
       </View>
-      <View style={styles.rideDetails}>
-        <Icon name="calendar-outline" size={16} color="#aaa" />
-        <Text style={styles.detailText}>{item.date}</Text>
-        <Icon
-          name="time-outline"
-          size={16}
-          color="#aaa"
-          style={{ marginLeft: 10 }}
-        />
-        <Text style={styles.detailText}>{item.time}</Text>
-        <Text style={styles.fare}>{item.fare}</Text>
-      </View>
-    </SafeAreaView>
+      <Text style={styles.amount}>{item.fare}</Text>
+    </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Recent Rides</Text>
+      <Text style={styles.header}>Recent Rides</Text>
       {loading ? (
-        <View style={styles.noRidesContainer}>
-          <Text style={styles.noRidesText}>Loading...</Text>
+        <View style={{ padding: 20 }}>
+          <Text style={{ color: '#FFFCFB' }}>Loading...</Text>
         </View>
-      ) : rides.length > 0 ? (
+      ) : (
         <FlatList
           data={rides}
           keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
           renderItem={renderRide}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          refreshing={refreshing}
-          onRefresh={refreshRides}
+          ListEmptyComponent={() => (
+            <View style={{ padding: 20 }}>
+              <Text style={{ color: '#B0B0B0' }}>No recent rides found.</Text>
+            </View>
+          )}
         />
-      ) : (
-        <View style={styles.noRidesContainer}>
-          <Text style={styles.noRidesText}>No recent rides found.</Text>
-        </View>
       )}
     </SafeAreaView>
   );
@@ -172,62 +134,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0F0E0E',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
-  title: {
-    color: '#FFFCFB',
-    fontSize: 24,
+  header: {
+    fontSize: 26,
     fontWeight: 'bold',
+    color: '#FFFCFB',
     marginBottom: 20,
+    textAlign: 'center',
   },
-  rideCard: {
+  card: {
     backgroundColor: '#1C1C1C',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  rideHeader: {
+    padding: 18,
+    borderRadius: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    alignItems: 'center',
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  route: {
-    color: '#FFFCFB',
+  date: {
     fontSize: 16,
-    fontWeight: 'bold',
+    color: '#FFFCFB',
+    fontWeight: '600',
+  },
+  label: {
+    fontSize: 14,
+    color: '#B0B0B0',
+    marginTop: 4,
   },
   status: {
-    fontWeight: 'bold',
     fontSize: 14,
-  },
-  rideDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  detailText: {
-    color: '#aaa',
-    fontSize: 14,
-    marginLeft: 5,
-  },
-  fare: {
-    color: '#FFFCFB',
-    fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 'auto',
+    marginTop: 4,
   },
-  noRidesContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noRidesText: {
-    color: '#aaa',
+  amount: {
     fontSize: 18,
+    fontWeight: 'bold',
+    color: '#00FF6A',
   },
 });

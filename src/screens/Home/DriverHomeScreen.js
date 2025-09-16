@@ -329,14 +329,17 @@ export default function DriverHomeScreen({ navigation }) {
                   <Text style={styles.earningsAmount}>
                     ${driverData.totalEarnings}
                   </Text>
-                  <Text style={styles.detailsLink}>View details</Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('EarningHistory')}
+                  >
+                    <Text style={styles.detailsLink}>View details</Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.vehicleInfo}>
                   <Text style={styles.vehicleLabel}>Your Vehicle</Text>
                   <Text style={styles.vehicleName}>
                     {driverData.vehicleName}
                   </Text>
-                  <Text style={styles.changeLink}>Change</Text>
                 </View>
               </View>
             </View>
