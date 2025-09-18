@@ -5,6 +5,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import HomeScreen from '../screens/Home/HomeScreen';
 import ProfileScreen from '../screens/Home/ProfileScreen';
 import RecentRidesScreen from '../screens/Home/RecentRidesScreen';
+import ChatScreen from '../screens/Home/ChatScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -43,6 +44,15 @@ const MainTabNavigator = () => {
         options={{
           tabBarIcon: ({ color, size }) => (
             <Icon name="car" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="chatbubbles" size={size} color={color} />
           ),
         }}
       />
