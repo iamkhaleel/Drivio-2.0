@@ -20,7 +20,7 @@ const slides = [
   },
   {
     id: 2,
-    image: require('../../assets/images/onboarding2.jpg'),
+    image: require('../../assets/images/youngphonemap.jpg'),
     title: 'Quick and simple\nride booking!',
   },
   {
@@ -52,7 +52,9 @@ export default function OnboardingScreen({ navigation }) {
           source={slide.image}
           style={styles.slide}
         >
-          {index === 0 && <Text style={styles.logo}>Drivio</Text>}
+          {(index === 0 || index === 1) && (
+            <Text style={styles.logo}>Qbar</Text>
+          )}
           <View style={styles.textContainer}>
             <Text style={styles.title}>{slide.title}</Text>
           </View>
@@ -100,7 +102,7 @@ const styles = StyleSheet.create({
     top: 50,
     fontSize: 150,
     color: '#0F0E0E',
-    fontFamily: 'cursive',
+    // fontFamily: 'cursive',
   },
   textContainer: {
     marginBottom: 40,
