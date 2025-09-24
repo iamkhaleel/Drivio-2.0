@@ -21,6 +21,8 @@ import {
   subscribeToNearbyRequests,
   acceptRideRequest,
   declineRideRequest,
+  getPendingPayments,
+  confirmPaymentReceived,
 } from '../../utils/RideService';
 
 const { width } = Dimensions.get('window');
@@ -43,6 +45,7 @@ export default function DriverHomeScreen({ navigation }) {
   });
   const [currentRide, setCurrentRide] = useState(null);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [pendingPayments, setPendingPayments] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef(null);
   const mapRef = useRef(null);
@@ -113,6 +116,27 @@ export default function DriverHomeScreen({ navigation }) {
     }
     return unsubscribe;
   }, [isAvailable, currentLocation]);
+
+  // Fetch pending payments
+  useEffect(() => {
+    if (!driverId) return;
+
+    const fetchPendingPayments = async () => {
+      try {
+        const payments = await getPendingPayments(driverId);
+        setPendingPayments(payments);
+      } catch (error) {
+        console.error('Error fetching pending payments:', error);
+      }
+    };
+
+    fetchPendingPayments();
+
+    // Set up interval to check for pending payments every 30 seconds
+    const interval = setInterval(fetchPendingPayments, 30000);
+
+    return () => clearInterval(interval);
+  }, [driverId]);
 
   // Toggle availability
   const toggleAvailability = async () => {
@@ -191,6 +215,42 @@ export default function DriverHomeScreen({ navigation }) {
     } catch (error) {
       console.error('Error declining ride:', error);
       Alert.alert('Error', 'Failed to decline ride.');
+    }
+  };
+
+  const handleConfirmPayment = async payment => {
+    try {
+      Alert.alert(
+        'Confirm Payment',
+        `Confirm that you have received $${payment.amount} from the rider?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Confirm',
+            onPress: async () => {
+              try {
+                await confirmPaymentReceived(payment.rideId, payment.id);
+                setPendingPayments(prev =>
+                  prev.filter(p => p.id !== payment.id),
+                );
+                Alert.alert(
+                  'Payment Confirmed',
+                  'Payment has been confirmed and added to your earnings.',
+                );
+              } catch (error) {
+                console.error('Error confirming payment:', error);
+                Alert.alert('Error', 'Failed to confirm payment.');
+              }
+            },
+          },
+        ],
+      );
+    } catch (error) {
+      console.error('Error handling payment confirmation:', error);
+      Alert.alert('Error', 'Failed to process payment confirmation.');
     }
   };
 
@@ -404,6 +464,36 @@ export default function DriverHomeScreen({ navigation }) {
                 <Text style={styles.noRideSubtext}>
                   Turn on availability to receive requests
                 </Text>
+              </View>
+            )}
+
+            {/* Pending Payments Section */}
+            {pendingPayments.length > 0 && (
+              <View style={styles.pendingPaymentsContainer}>
+                <Text style={styles.pendingPaymentsTitle}>
+                  💰 Pending Payments ({pendingPayments.length})
+                </Text>
+                {pendingPayments.map((payment, index) => (
+                  <View key={payment.id} style={styles.paymentCard}>
+                    <View style={styles.paymentInfo}>
+                      <Text style={styles.paymentAmount}>
+                        ${payment.amount}
+                      </Text>
+                      <Text style={styles.paymentStatus}>
+                        Waiting for confirmation
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.confirmPaymentButton}
+                      onPress={() => handleConfirmPayment(payment)}
+                    >
+                      <Icon name="check-circle" size={20} color="#fff" />
+                      <Text style={styles.confirmPaymentButtonText}>
+                        Payment Received
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
             )}
           </View>
@@ -763,5 +853,58 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 15,
     textAlign: 'center',
+  },
+  pendingPaymentsContainer: {
+    marginBottom: 20,
+  },
+  pendingPaymentsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  paymentCard: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 15,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFD700',
+  },
+  paymentInfo: {
+    flex: 1,
+  },
+  paymentAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#00C851',
+    marginBottom: 5,
+  },
+  paymentStatus: {
+    fontSize: 14,
+    color: '#666',
+  },
+  confirmPaymentButton: {
+    backgroundColor: '#00C851',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  confirmPaymentButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });

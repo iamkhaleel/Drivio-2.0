@@ -30,6 +30,8 @@ export default function ProfileSettingsScreen({ navigation }) {
   const [carColor, setCarColor] = useState('');
   const [licensePlate, setLicensePlate] = useState('');
   const [bankAccount, setBankAccount] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankAccountName, setBankAccountName] = useState('');
   const [driverLicense, setDriverLicense] = useState('');
   const [driverImage, setDriverImage] = useState(null); // Store local URI for preview
   const [carImage, setCarImage] = useState(null); // Store local URI for preview
@@ -59,6 +61,8 @@ export default function ProfileSettingsScreen({ navigation }) {
           setCarColor(data.carColor || '');
           setLicensePlate(data.licensePlate || '');
           setBankAccount(data.bankAccount || '');
+          setBankName(data.bankName || '');
+          setBankAccountName(data.bankAccountName || '');
           setDriverLicense(data.driverLicense || '');
           setDriverImage(data.driverImageUrl || null); // Load Firebase Storage URL
           setCarImage(data.carImageUrl || null); // Load Firebase Storage URL
@@ -162,6 +166,8 @@ export default function ProfileSettingsScreen({ navigation }) {
             carColor,
             licensePlate,
             bankAccount,
+            bankName,
+            bankAccountName,
             driverLicense,
             driverImageUrl: driverImageUrlNew || null, // Store Firebase URL
             carImageUrl: carImageUrlNew || null, // Store Firebase URL
@@ -223,7 +229,17 @@ export default function ProfileSettingsScreen({ navigation }) {
             setValue: setLicensePlate,
           },
           {
-            placeholder: 'Bank Account',
+            placeholder: 'Bank Name',
+            value: bankName,
+            setValue: setBankName,
+          },
+          {
+            placeholder: 'Bank Account Name',
+            value: bankAccountName,
+            setValue: setBankAccountName,
+          },
+          {
+            placeholder: 'Bank Account Number',
             value: bankAccount,
             setValue: setBankAccount,
             keyboardType: 'numeric',

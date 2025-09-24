@@ -35,6 +35,10 @@ export const findNearbyDrivers = async (userLocation, maxDistance = 5) => {
             data.username ||
             'Unknown Driver',
           distance: calculateDistance(userLocation, data.currentLocation),
+          // Ensure bank details are included
+          bankAccount: data.bankAccount,
+          bankName: data.bankName,
+          bankAccountName: data.bankAccountName,
         };
       })
       .filter(driver => driver.distance <= maxDistance)
@@ -253,6 +257,66 @@ export const rateRide = async (rideId, driverId, rating, review = '') => {
     await batch.commit();
   } catch (error) {
     console.error('Error rating ride:', error);
+    throw error;
+  }
+};
+
+// Driver confirms payment received
+export const confirmPaymentReceived = async (rideId, paymentId) => {
+  try {
+    const batch = firestore().batch();
+
+    // Update payment status
+    const paymentRef = firestore().collection('payments').doc(paymentId);
+    batch.update(paymentRef, {
+      status: 'completed',
+      confirmedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Update ride status
+    const rideRef = firestore().collection('rides').doc(rideId);
+    const rideDoc = await rideRef.get();
+    const rideData = rideDoc.data();
+
+    batch.update(rideRef, {
+      status: 'completed',
+      paymentConfirmed: true,
+      completedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Update driver earnings
+    const driverRef = firestore().collection('drivers').doc(rideData.driverId);
+    const driverDoc = await driverRef.get();
+    const currentEarnings = driverDoc.data().totalEarnings || 0;
+
+    batch.update(driverRef, {
+      totalEarnings: currentEarnings + rideData.estimatedFare,
+      totalRides: firestore.FieldValue.increment(1),
+      isAvailable: true, // Driver becomes available again
+    });
+
+    await batch.commit();
+  } catch (error) {
+    console.error('Error confirming payment:', error);
+    throw error;
+  }
+};
+
+// Get pending payments for a driver
+export const getPendingPayments = async driverId => {
+  try {
+    const payments = await firestore()
+      .collection('payments')
+      .where('driverId', '==', driverId)
+      .where('status', '==', 'pending')
+      .get();
+
+    return payments.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Error fetching pending payments:', error);
     throw error;
   }
 };

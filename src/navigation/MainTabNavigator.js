@@ -47,7 +47,7 @@ const MainTabNavigator = () => {
           ),
         }}
       />
-      <Tab.Screen
+      {/* <Tab.Screen
         name="Chat"
         component={ChatScreen}
         options={{
@@ -55,7 +55,7 @@ const MainTabNavigator = () => {
             <Icon name="chatbubbles" size={size} color={color} />
           ),
         }}
-      />
+      /> */}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}

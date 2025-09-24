@@ -196,7 +196,7 @@ export default function HomeScreen() {
         destination: destination,
         riderId,
         estimatedFare,
-        paymentMethod: paymentMethod || 'stripe', // Default to stripe if not set
+        paymentMethod: 'bank_transfer', // Bank transfer only
       });
       setRideId(newRideId);
 
@@ -236,7 +236,7 @@ export default function HomeScreen() {
       }
       setPaymentMethod(method);
 
-      // Create a payment record (for testing, mark as succeeded)
+      // Create a payment record with pending status for bank transfer
       const paymentRef = await firestore()
         .collection('payments')
         .add({
@@ -246,21 +246,24 @@ export default function HomeScreen() {
           method,
           amount: Number(estimatedFare),
           currency: 'usd',
-          status: 'succeeded',
+          status: 'pending', // Pending until driver confirms payment received
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
-      // Update earnings and mark ride as completed
-      await updateRideComplete(
-        rideId,
-        selectedDriver.id,
-        Number(estimatedFare),
-      );
+      // Update ride status to waiting for payment
+      await firestore().collection('rides').doc(rideId).update({
+        status: 'waiting_for_payment',
+        paymentId: paymentRef.id,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
 
       setShowPayment(false);
       setSelectedDriver(null);
       setRideId(null);
-      Alert.alert('Payment Successful', 'Your ride is on the way!');
+      Alert.alert(
+        'Payment Instructions Sent',
+        'Please transfer the money to the provided bank account. Your driver will confirm once payment is received.',
+      );
     } catch (err) {
       console.error('Payment error:', err);
       Alert.alert('Payment Failed', 'Could not process payment.');
@@ -574,7 +577,7 @@ export default function HomeScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Payment Method</Text>
+              <Text style={styles.modalTitle}>Payment Instructions</Text>
               <TouchableOpacity onPress={() => setShowPayment(false)}>
                 <Icon name="close" size={24} color="#000" />
               </TouchableOpacity>
@@ -583,25 +586,62 @@ export default function HomeScreen() {
               Amount: ${estimatedFare?.toFixed(2) || selectedDriver?.price}
             </Text>
 
-            <TouchableOpacity
-              style={styles.paymentOption}
-              onPress={() => handlePayment('stripe')}
-            >
-              <Icon name="card" size={24} color="#0066FF" />
-              <Text style={styles.paymentOptionText}>Pay with Stripe</Text>
-            </TouchableOpacity>
-
-            {selectedDriver?.paymentMethods?.includes('bank_transfer') && (
-              <TouchableOpacity
-                style={styles.paymentOption}
-                onPress={() => handlePayment('bank_transfer')}
-              >
-                <Icon name="business" size={24} color="#0066FF" />
-                <Text style={styles.paymentOptionText}>
-                  Bank Transfer to {selectedDriver.bankAccount}
+            <View style={styles.bankTransferInfo}>
+              <Icon
+                name="business"
+                size={24}
+                color="#0066FF"
+                style={styles.bankIcon}
+              />
+              <View style={styles.bankDetails}>
+                <Text style={styles.bankTransferTitle}>
+                  Bank Transfer Required
                 </Text>
-              </TouchableOpacity>
-            )}
+                <Text style={styles.bankAccountText}>
+                  Transfer ${estimatedFare?.toFixed(2) || selectedDriver?.price}{' '}
+                  to:
+                </Text>
+
+                <View style={styles.bankInfoContainer}>
+                  <View style={styles.bankInfoRow}>
+                    <Text style={styles.bankInfoLabel}>Bank:</Text>
+                    <Text style={styles.bankInfoValue}>
+                      {selectedDriver?.bankName || 'Bank name not available'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.bankInfoRow}>
+                    <Text style={styles.bankInfoLabel}>Account Name:</Text>
+                    <Text style={styles.bankInfoValue}>
+                      {selectedDriver?.bankAccountName ||
+                        'Account name not available'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.bankInfoRow}>
+                    <Text style={styles.bankInfoLabel}>Account Number:</Text>
+                    <Text style={styles.bankAccountNumber}>
+                      {selectedDriver?.bankAccount ||
+                        'Account number not available'}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.bankTransferNote}>
+                  Please complete the bank transfer and confirm with your
+                  driver.
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.confirmPaymentButton}
+              onPress={() => handlePayment('bank_transfer')}
+            >
+              <Text style={styles.confirmPaymentButtonText}>
+                I have transferred the money
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -892,19 +932,82 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  paymentOption: {
+  bankTransferInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
+    borderColor: '#e9ecef',
+  },
+  bankIcon: {
+    marginRight: 15,
+    marginTop: 5,
+  },
+  bankDetails: {
+    flex: 1,
+  },
+  bankTransferTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
     marginBottom: 10,
   },
-  paymentOptionText: {
-    marginLeft: 10,
+  bankAccountText: {
     fontSize: 16,
-    color: '#000',
+    color: '#666',
+    marginBottom: 5,
+  },
+  bankInfoContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  bankInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bankInfoLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+    flex: 1,
+  },
+  bankInfoValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+    flex: 2,
+    textAlign: 'right',
+  },
+  bankAccountNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0066FF',
+    textAlign: 'right',
+    flex: 2,
+  },
+  bankTransferNote: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  confirmPaymentButton: {
+    backgroundColor: '#0066FF',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  confirmPaymentButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   noDrivers: {
     justifyContent: 'center',

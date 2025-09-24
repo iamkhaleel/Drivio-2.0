@@ -28,6 +28,8 @@ export default function DriverRegisterScreen({ navigation }) {
   const [carColor, setCarColor] = useState('');
   const [licensePlate, setLicensePlate] = useState('');
   const [bankAccount, setBankAccount] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankAccountName, setBankAccountName] = useState('');
   const [driverLicense, setDriverLicense] = useState('');
   const [driverImage, setDriverImage] = useState(null);
   const [carImage, setCarImage] = useState(null);
@@ -142,10 +144,18 @@ export default function DriverRegisterScreen({ navigation }) {
 
   const handleSignUp = async () => {
     // Basic validation including bank account required
-    if (!email || !password || !username || !fullName || !bankAccount) {
+    if (
+      !email ||
+      !password ||
+      !username ||
+      !fullName ||
+      !bankAccount ||
+      !bankName ||
+      !bankAccountName
+    ) {
       Alert.alert(
         'Error',
-        'Please fill all required fields including bank account.',
+        'Please fill all required fields including bank details.',
       );
       return;
     }
@@ -154,7 +164,10 @@ export default function DriverRegisterScreen({ navigation }) {
       return;
     }
     if (!/^[0-9]{6,}$/.test(bankAccount)) {
-      Alert.alert('Error', 'Enter a valid bank account number.');
+      Alert.alert(
+        'Error',
+        'Bank account number must be at least 6 digits and contain only numbers.',
+      );
       return;
     }
     setUploading(true);
@@ -196,6 +209,8 @@ export default function DriverRegisterScreen({ navigation }) {
         carColor,
         licensePlate,
         bankAccount,
+        bankName,
+        bankAccountName,
         driverLicense,
         driverImage: driverImageUrl,
         carImage: carImageUrl,
@@ -327,14 +342,35 @@ export default function DriverRegisterScreen({ navigation }) {
           onChangeText={setLicensePlate}
         />
 
+        <Text style={styles.sectionTitle}>Bank Details</Text>
+
         <TextInput
           style={styles.input}
-          placeholder="Bank Account Number"
+          placeholder="Bank Name *"
+          placeholderTextColor="#ccc"
+          value={bankName}
+          onChangeText={setBankName}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Bank Account Name *"
+          placeholderTextColor="#ccc"
+          value={bankAccountName}
+          onChangeText={setBankAccountName}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Bank Account Number *"
           placeholderTextColor="#ccc"
           value={bankAccount}
           onChangeText={setBankAccount}
           keyboardType="numeric"
         />
+        <Text style={styles.requiredText}>
+          * Bank details are required for receiving payments
+        </Text>
 
         <TextInput
           style={styles.input}
@@ -501,5 +537,11 @@ const styles = StyleSheet.create({
     color: '#0F0E0E',
     textAlign: 'center',
     marginTop: 20,
+  },
+  requiredText: {
+    color: '#FF6B00',
+    fontSize: 12,
+    marginBottom: 15,
+    fontStyle: 'italic',
   },
 });
