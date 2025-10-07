@@ -33,11 +33,13 @@ import {
   updateRideComplete,
 } from '../../utils/RideService';
 import 'react-native-get-random-values';
+import { useLanguage } from '../../context/LanguageContext';
 
 const { width, height } = Dimensions.get('window');
 const GOOGLE_MAPS_APIKEY = 'AIzaSyDVHGYwW8ZjOxqLDxNjhp4LGBSer3K4o-g';
 
 export default function HomeScreen() {
+  const { t } = useLanguage();
   const [location, setLocation] = useState(null);
   const [destination, setDestination] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
@@ -319,7 +321,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <GooglePlacesAutocomplete
           ref={inputRef}
-          placeholder="Where to?"
+          placeholder={t('whereTo')}
           fetchDetails={true}
           debounce={200}
           enablePoweredByContainer={true}
@@ -330,7 +332,7 @@ export default function HomeScreen() {
           listViewDisplayed="auto"
           keepResultsAfterBlur={false}
           currentLocation={false}
-          currentLocationLabel="Current location"
+          currentLocationLabel={t('currentLocation')}
           enableHighAccuracyLocation={true}
           onFail={() => console.warn('Google Places Autocomplete failed')}
           onNotFound={() => console.log('No results found')}
@@ -388,7 +390,7 @@ export default function HomeScreen() {
           }}
           textInputProps={{
             placeholderTextColor: 'gray',
-            placeholder: 'Where do you want to go?',
+            placeholder: t('whereDoYouWantToGo'),
           }}
         />
         <TouchableOpacity
@@ -410,11 +412,11 @@ export default function HomeScreen() {
             showsMyLocationButton={true}
             provider="google"
           >
-            <Marker coordinate={location} title="You are here" />
+            <Marker coordinate={location} title={t('youAreHere')} />
             {destination && (
               <Marker
                 coordinate={destination}
-                title="Destination"
+                title={t('destination')}
                 description={destination.address}
                 pinColor="red"
               />
@@ -463,14 +465,14 @@ export default function HomeScreen() {
             onPress={handleGoButtonPress}
             disabled={locationPermissionDenied}
           >
-            <Text style={styles.goText}>GO</Text>
+            <Text style={styles.goText}>{t('go')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Status Bar: Only show if offline */}
         {isOffline && (
           <View style={styles.statusBar}>
-            <Text style={styles.statusText}>You're offline</Text>
+            <Text style={styles.statusText}>{t('youreOffline')}</Text>
             <Icon name="list-outline" size={22} color="#fff" />
           </View>
         )}
@@ -481,7 +483,7 @@ export default function HomeScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Available Drivers</Text>
+              <Text style={styles.modalTitle}>{t('availableDrivers')}</Text>
               <TouchableOpacity onPress={() => setShowRides(false)}>
                 <Icon name="close" size={24} color="#000" />
               </TouchableOpacity>
@@ -498,9 +500,7 @@ export default function HomeScreen() {
               />
             ) : (
               <View style={styles.noDrivers}>
-                <Text style={styles.noDriversText}>
-                  No drivers available nearby.
-                </Text>
+                <Text style={styles.noDriversText}>{t('noDriversNearby')}</Text>
               </View>
             )}
           </View>
@@ -511,7 +511,7 @@ export default function HomeScreen() {
       {selectedDriver && (
         <View style={styles.rideDetails}>
           <View style={styles.rideDetailsHeader}>
-            <Text style={styles.rideDetailsTitle}>Ride Details</Text>
+            <Text style={styles.rideDetailsTitle}>{t('rideDetails')}</Text>
             <TouchableOpacity onPress={() => setSelectedDriver(null)}>
               <Icon name="close" size={24} color="#fff" />
             </TouchableOpacity>
@@ -559,7 +559,7 @@ export default function HomeScreen() {
                 ${estimatedFare?.toFixed(2) || 'N/A'}
               </Text>
               <Text style={styles.etaLarge}>
-                ETA: {Math.round(distance / 0.3)} min
+                {t('eta')}: {Math.round(distance / 0.3)} {t('min')}
               </Text>
             </View>
           </View>
@@ -567,7 +567,7 @@ export default function HomeScreen() {
             style={styles.confirmButton}
             onPress={handleConfirmRide}
           >
-            <Text style={styles.confirmButtonText}>Confirm Ride</Text>
+            <Text style={styles.confirmButtonText}>{t('confirmRide')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -577,13 +577,13 @@ export default function HomeScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Payment Instructions</Text>
+              <Text style={styles.modalTitle}>{t('paymentInstructions')}</Text>
               <TouchableOpacity onPress={() => setShowPayment(false)}>
                 <Icon name="close" size={24} color="#000" />
               </TouchableOpacity>
             </View>
             <Text style={styles.paymentAmount}>
-              Amount: ${estimatedFare?.toFixed(2) || selectedDriver?.price}
+              ${estimatedFare?.toFixed(2) || selectedDriver?.price}
             </Text>
 
             <View style={styles.bankTransferInfo}>
@@ -595,41 +595,37 @@ export default function HomeScreen() {
               />
               <View style={styles.bankDetails}>
                 <Text style={styles.bankTransferTitle}>
-                  Bank Transfer Required
+                  {t('bankTransferRequired')}
                 </Text>
-                <Text style={styles.bankAccountText}>
-                  Transfer ${estimatedFare?.toFixed(2) || selectedDriver?.price}{' '}
-                  to:
-                </Text>
+                <Text style={styles.bankAccountText}>{t('transferTo')}</Text>
 
                 <View style={styles.bankInfoContainer}>
                   <View style={styles.bankInfoRow}>
-                    <Text style={styles.bankInfoLabel}>Bank:</Text>
+                    <Text style={styles.bankInfoLabel}>{t('bank')}</Text>
                     <Text style={styles.bankInfoValue}>
-                      {selectedDriver?.bankName || 'Bank name not available'}
+                      {selectedDriver?.bankName || t('bankNameNA')}
                     </Text>
                   </View>
 
                   <View style={styles.bankInfoRow}>
-                    <Text style={styles.bankInfoLabel}>Account Name:</Text>
+                    <Text style={styles.bankInfoLabel}>{t('accountName')}</Text>
                     <Text style={styles.bankInfoValue}>
-                      {selectedDriver?.bankAccountName ||
-                        'Account name not available'}
+                      {selectedDriver?.bankAccountName || t('accountNameNA')}
                     </Text>
                   </View>
 
                   <View style={styles.bankInfoRow}>
-                    <Text style={styles.bankInfoLabel}>Account Number:</Text>
+                    <Text style={styles.bankInfoLabel}>
+                      {t('accountNumber')}
+                    </Text>
                     <Text style={styles.bankAccountNumber}>
-                      {selectedDriver?.bankAccount ||
-                        'Account number not available'}
+                      {selectedDriver?.bankAccount || t('accountNumberNA')}
                     </Text>
                   </View>
                 </View>
 
                 <Text style={styles.bankTransferNote}>
-                  Please complete the bank transfer and confirm with your
-                  driver.
+                  {t('pleaseConfirmWithDriver')}
                 </Text>
               </View>
             </View>
@@ -639,7 +635,7 @@ export default function HomeScreen() {
               onPress={() => handlePayment('bank_transfer')}
             >
               <Text style={styles.confirmPaymentButtonText}>
-                I have transferred the money
+                {t('iHaveTransferred')}
               </Text>
             </TouchableOpacity>
           </View>

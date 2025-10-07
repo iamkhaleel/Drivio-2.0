@@ -52,9 +52,9 @@ export default function OnboardingScreen({ navigation }) {
           source={slide.image}
           style={styles.slide}
         >
-          {(index === 0 || index === 1) && (
+          {/* {(index === 0 || index === 1) && (
             <Text style={styles.logo}>Qbar</Text>
-          )}
+          )} */}
           <View style={styles.textContainer}>
             <Text style={styles.title}>{slide.title}</Text>
           </View>

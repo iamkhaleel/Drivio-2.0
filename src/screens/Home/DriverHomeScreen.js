@@ -24,10 +24,12 @@ import {
   getPendingPayments,
   confirmPaymentReceived,
 } from '../../utils/RideService';
+import { useLanguage } from '../../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
 export default function DriverHomeScreen({ navigation }) {
+  const { t, language, setLanguage } = useLanguage();
   const driverId = auth().currentUser?.uid;
   const [driverData, setDriverData] = useState({
     name: 'Loading...',
@@ -268,7 +270,7 @@ export default function DriverHomeScreen({ navigation }) {
           />
           <Text style={styles.drawerProfileName}>{driverData.name}</Text>
           <Text style={styles.drawerProfileStatus}>
-            {isAvailable ? 'Available for work' : 'Offline'}
+            {isAvailable ? t('availableForWork') : t('offline')}
           </Text>
         </View>
         <View style={styles.drawerSection}>
@@ -280,7 +282,7 @@ export default function DriverHomeScreen({ navigation }) {
             }}
           >
             <Icon name="wallet" size={20} color="#fff" />
-            <Text style={styles.drawerItemText}>Earnings History</Text>
+            <Text style={styles.drawerItemText}>{t('earningsHistory')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.drawerItem}
@@ -290,7 +292,7 @@ export default function DriverHomeScreen({ navigation }) {
             }}
           >
             <Icon name="money-check" size={20} color="#fff" />
-            <Text style={styles.drawerItemText}>Withdraw Earnings</Text>
+            <Text style={styles.drawerItemText}>{t('withdrawEarnings')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.drawerItem}
@@ -300,8 +302,40 @@ export default function DriverHomeScreen({ navigation }) {
             }}
           >
             <Icon name="user-cog" size={20} color="#fff" />
-            <Text style={styles.drawerItemText}>Profile Settings</Text>
+            <Text style={styles.drawerItemText}>{t('profileSettings')}</Text>
           </TouchableOpacity>
+
+          {/* Language Selector */}
+          <View style={styles.drawerItem}>
+            <Icon name="language" size={20} color="#fff" />
+            <Text style={[styles.drawerItemText, { flex: 1 }]}>
+              {t('language')}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setLanguage('en')}
+              style={{ marginHorizontal: 8 }}
+            >
+              <Text
+                style={[
+                  styles.drawerItemText,
+                  { color: language === 'en' ? '#A91079' : '#fff' },
+                ]}
+              >
+                {t('english')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setLanguage('ar')}>
+              <Text
+                style={[
+                  styles.drawerItemText,
+                  { color: language === 'ar' ? '#A91079' : '#fff' },
+                ]}
+              >
+                {t('arabic')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={styles.drawerItem}
             onPress={() => {
@@ -313,7 +347,7 @@ export default function DriverHomeScreen({ navigation }) {
           >
             <Icon name="sign-out-alt" size={20} color="#ff3b30" />
             <Text style={[styles.drawerItemText, { color: '#ff3b30' }]}>
-              Logout
+              {t('logout')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -339,7 +373,7 @@ export default function DriverHomeScreen({ navigation }) {
             <View style={styles.headerCenter}>
               <Text style={styles.headerName}>{driverData.name}</Text>
               <Text style={styles.headerStatus}>
-                {isAvailable ? 'Available' : 'Offline'}
+                {isAvailable ? t('available') : t('offline')}
               </Text>
             </View>
             <TouchableOpacity
@@ -354,7 +388,7 @@ export default function DriverHomeScreen({ navigation }) {
               onPress={toggleAvailability}
             >
               <Text style={styles.availabilityButtonText}>
-                {isAvailable ? 'Go Offline' : 'Go Online'}
+                {isAvailable ? t('goOffline') : t('goOnline')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -385,18 +419,18 @@ export default function DriverHomeScreen({ navigation }) {
             <View style={styles.earningsCard}>
               <View style={styles.earningsHeader}>
                 <View style={styles.earningsInfo}>
-                  <Text style={styles.earningsLabel}>Total Earnings</Text>
+                  <Text style={styles.earningsLabel}>{t('totalEarnings')}</Text>
                   <Text style={styles.earningsAmount}>
                     ${driverData.totalEarnings}
                   </Text>
                   <TouchableOpacity
                     onPress={() => navigation.navigate('EarningHistory')}
                   >
-                    <Text style={styles.detailsLink}>View details</Text>
+                    <Text style={styles.detailsLink}>{t('viewDetails')}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.vehicleInfo}>
-                  <Text style={styles.vehicleLabel}>Your Vehicle</Text>
+                  <Text style={styles.vehicleLabel}>{t('yourVehicle')}</Text>
                   <Text style={styles.vehicleName}>
                     {driverData.vehicleName}
                   </Text>
@@ -406,12 +440,13 @@ export default function DriverHomeScreen({ navigation }) {
             {pendingRequests.length > 0 ? (
               <View style={styles.requestsContainer}>
                 <Text style={styles.requestsTitle}>
-                  🚖 Ride Requests ({pendingRequests.length})
+                  🚖 {t('rideRequests')} ({pendingRequests.length})
                 </Text>
                 {pendingRequests.map((request, index) => (
                   <View key={request.id} style={styles.rideCard}>
                     <Text style={styles.rideCardTitle}>
-                      Request #{index + 1}
+                      {t('requestHash')}
+                      {index + 1}
                     </Text>
 
                     <Text style={styles.rideDestination}>
@@ -425,13 +460,15 @@ export default function DriverHomeScreen({ navigation }) {
 
                     <View style={styles.rideInfoContainer}>
                       <View style={styles.rideInfo}>
-                        <Text style={styles.rideInfoLabel}>Distance</Text>
+                        <Text style={styles.rideInfoLabel}>
+                          {t('distance')}
+                        </Text>
                         <Text style={styles.rideInfoValue}>
                           {request.distance?.toFixed(2)} km
                         </Text>
                       </View>
                       <View style={styles.rideInfo}>
-                        <Text style={styles.rideInfoLabel}>Fare</Text>
+                        <Text style={styles.rideInfoLabel}>{t('fare')}</Text>
                         <Text style={styles.rideInfoValue}>
                           ${request.fare?.toFixed(2)}
                         </Text>
@@ -444,7 +481,9 @@ export default function DriverHomeScreen({ navigation }) {
                         onPress={() => handleDeclineRide(request.id)}
                       >
                         <Icon name="times-circle" size={20} color="#fff" />
-                        <Text style={styles.actionButtonText}>Decline</Text>
+                        <Text style={styles.actionButtonText}>
+                          {t('decline')}
+                        </Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -452,7 +491,9 @@ export default function DriverHomeScreen({ navigation }) {
                         onPress={() => handleAcceptRide(request.id)}
                       >
                         <Icon name="check-circle" size={20} color="#fff" />
-                        <Text style={styles.actionButtonText}>Accept</Text>
+                        <Text style={styles.actionButtonText}>
+                          {t('accept')}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -460,9 +501,9 @@ export default function DriverHomeScreen({ navigation }) {
               </View>
             ) : (
               <View style={styles.noRideContainer}>
-                <Text style={styles.noRideText}>No ride requests</Text>
+                <Text style={styles.noRideText}>{t('noRideRequests')}</Text>
                 <Text style={styles.noRideSubtext}>
-                  Turn on availability to receive requests
+                  {t('turnOnAvailability')}
                 </Text>
               </View>
             )}
@@ -471,7 +512,7 @@ export default function DriverHomeScreen({ navigation }) {
             {pendingPayments.length > 0 && (
               <View style={styles.pendingPaymentsContainer}>
                 <Text style={styles.pendingPaymentsTitle}>
-                  💰 Pending Payments ({pendingPayments.length})
+                  💰 {t('pendingPayments')} ({pendingPayments.length})
                 </Text>
                 {pendingPayments.map((payment, index) => (
                   <View key={payment.id} style={styles.paymentCard}>
@@ -480,7 +521,7 @@ export default function DriverHomeScreen({ navigation }) {
                         ${payment.amount}
                       </Text>
                       <Text style={styles.paymentStatus}>
-                        Waiting for confirmation
+                        {t('waitingForConfirmation')}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -489,7 +530,7 @@ export default function DriverHomeScreen({ navigation }) {
                     >
                       <Icon name="check-circle" size={20} color="#fff" />
                       <Text style={styles.confirmPaymentButtonText}>
-                        Payment Received
+                        {t('paymentReceived')}
                       </Text>
                     </TouchableOpacity>
                   </View>

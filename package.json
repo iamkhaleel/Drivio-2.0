@@ -25,6 +25,7 @@
     "@stripe/stripe-react-native": "^0.52.0",
     "axios": "^1.11.0",
     "firebase": "^12.2.1",
+    "firebase-admin": "^13.5.0",
     "geolib": "^3.3.4",
     "i18n-js": "^4.5.1",
     "lottie-ios": "^4.5.1",

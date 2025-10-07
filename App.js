@@ -18,6 +18,8 @@ import MainTabNavigator from './src/navigation/MainTabNavigator';
 import EarningHistoryScreen from './src/screens/Home/EarningHistoryScreen';
 import Withdrawal from './src/screens/Home/Withdrawal';
 import ProfileSettingsScreen from './src/screens/Home/ProfileSettingsScreen';
+import { LanguageProvider } from './src/context/LanguageContext';
+import AdminScreen from './src/screens/Admin/AdminScreen';
 
 const Stack = createStackNavigator();
 
@@ -70,25 +72,38 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName={initialRoute}
-        screenOptions={{ headerShown: false }}
-      >
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Register" component={RegisterScreen} />
-        <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-        <Stack.Screen name="Main" component={MainTabNavigator} />
-        <Stack.Screen name="DriverHome" component={DriverHomeScreen} />
-        <Stack.Screen name="EarningHistory" component={EarningHistoryScreen} />
-        <Stack.Screen name="Withdrawal" component={Withdrawal} />
-        <Stack.Screen
-          name="ProfileSettingsScreen"
-          component={ProfileSettingsScreen}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <LanguageProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName={initialRoute}
+          screenOptions={{ headerShown: false }}
+        >
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen
+            name="DriverRegister"
+            component={DriverRegisterScreen}
+          />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+          />
+          <Stack.Screen name="Main" component={MainTabNavigator} />
+          <Stack.Screen name="DriverHome" component={DriverHomeScreen} />
+          {/* Hidden route, only navigated to for admins */}
+          <Stack.Screen name="Admin" component={AdminScreen} />
+          <Stack.Screen
+            name="EarningHistory"
+            component={EarningHistoryScreen}
+          />
+          <Stack.Screen name="Withdrawal" component={Withdrawal} />
+          <Stack.Screen
+            name="ProfileSettingsScreen"
+            component={ProfileSettingsScreen}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </LanguageProvider>
   );
 }

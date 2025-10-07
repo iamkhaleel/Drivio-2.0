@@ -11,10 +11,19 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function ProfileScreen({ navigation }) {
+  const { t, language, setLanguage } = useLanguage();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [canAccessAdmin, setCanAccessAdmin] = useState(false);
+
+  const ADMIN_EMAILS = [
+    'rawadmuaz@gmail.com',
+    'khaleelibraheem341@gmail.com',
+    'ktubefootball@gmail.com',
+  ];
 
   // Fetch user profile data on mount
   useEffect(() => {
@@ -30,6 +39,20 @@ export default function ProfileScreen({ navigation }) {
         } else {
           console.log('No user document found in Firestore.');
         }
+
+        // Determine admin access: whitelist OR custom claim
+        const isWhitelisted = ADMIN_EMAILS.includes(
+          (user.email || '').toLowerCase(),
+        );
+        let hasClaim = false;
+        try {
+          await user.getIdToken(true);
+          const tokenResult = await user.getIdTokenResult();
+          hasClaim = tokenResult?.claims?.admin === true;
+        } catch (e) {
+          // ignore
+        }
+        setCanAccessAdmin(isWhitelisted || hasClaim);
       } catch (error) {
         console.error('Error fetching user data:', error);
       }
@@ -74,6 +97,31 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const navigateToAdminIfAllowed = async () => {
+    try {
+      const user = auth().currentUser;
+      if (!user) return;
+
+      const isWhitelisted = ADMIN_EMAILS.includes(
+        (user.email || '').toLowerCase(),
+      );
+      if (isWhitelisted) {
+        navigation.navigate('Admin');
+      } else {
+        await user.getIdToken(true);
+        const tokenResult = await user.getIdTokenResult();
+        const isAdmin = tokenResult?.claims?.admin === true;
+        if (isAdmin) {
+          navigation.navigate('Admin');
+        } else {
+          Alert.alert('Access Denied', 'You are not an admin.');
+        }
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not verify admin access');
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Profile Picture Placeholder (non-functional) */}
@@ -85,15 +133,15 @@ export default function ProfileScreen({ navigation }) {
 
       {/* Profile Info */}
       <View style={styles.infoContainer}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>{t('email')}</Text>
         <View style={styles.readOnlyField}>
           <Text style={styles.readOnlyText}>{email}</Text>
         </View>
 
-        <Text style={styles.label}>Username</Text>
+        <Text style={styles.label}>{t('username')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="Enter username"
+          placeholder={t('enterUsername')}
           placeholderTextColor="#aaa"
           value={username}
           onChangeText={setUsername}
@@ -102,16 +150,59 @@ export default function ProfileScreen({ navigation }) {
 
       {/* Save Button */}
       <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveText}>Save Changes</Text>
+        <Text style={styles.saveText}>{t('saveChanges')}</Text>
       </TouchableOpacity>
+
+      {/* Language Switcher */}
+      <View style={[styles.infoContainer, { marginTop: 10 }]}>
+        <Text style={styles.label}>{t('language')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => setLanguage('en')}
+            style={{ marginRight: 16 }}
+          >
+            <Text
+              style={{
+                color: language === 'en' ? '#A91079' : '#FFFCFB',
+                fontWeight: 'bold',
+              }}
+            >
+              {t('english')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setLanguage('ar')}>
+            <Text
+              style={{
+                color: language === 'ar' ? '#A91079' : '#FFFCFB',
+                fontWeight: 'bold',
+              }}
+            >
+              {t('arabic')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* Logout Button */}
       <TouchableOpacity
         style={[styles.saveButton, { backgroundColor: '#FF3B30' }]}
         onPress={handleLogout}
       >
-        <Text style={styles.saveText}>Log out</Text>
+        <Text style={styles.saveText}>{t('logoutBtn')}</Text>
       </TouchableOpacity>
+
+      {/* Hidden/Conditional Admin Button */}
+      {canAccessAdmin && (
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            { backgroundColor: '#333', marginTop: 10 },
+          ]}
+          onPress={navigateToAdminIfAllowed}
+        >
+          <Text style={styles.saveText}>Admin</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
